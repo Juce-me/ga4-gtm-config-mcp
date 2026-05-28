@@ -1,4 +1,4 @@
-const SECRET_KEY_RE = /(token|secret|password|refresh_token|api[_-]?key|oauth|client_secret|authorization)/i;
+const SECRET_KEY_RE = /(token|secret|password|refresh_token|api[_-]?key|oauth|client_secret|authorization|private[_-]?key|credentials?)/i;
 
 export function redact<T>(value: T): T {
   if (Array.isArray(value)) return value.map(redact) as unknown as T;

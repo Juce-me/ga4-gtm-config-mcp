@@ -20,4 +20,13 @@ describe("redact", () => {
   it("walks arrays", () => {
     expect(redact([{ password: "p" }])).toEqual([{ password: "[REDACTED]" }]);
   });
+
+  it("redacts private_key, private-key, credentials, credential", () => {
+    expect(redact({ private_key: "PEM", "private-key": "PEM", credentials: {x: 1}, credential: "x" })).toEqual({
+      private_key: "[REDACTED]",
+      "private-key": "[REDACTED]",
+      credentials: "[REDACTED]",
+      credential: "[REDACTED]",
+    });
+  });
 });

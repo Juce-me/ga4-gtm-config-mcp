@@ -2358,3 +2358,64 @@ npm test               # → 86 passing
 npm run typecheck      # → no errors
 npm run build          # → dist/ populated
 ```
+
+---
+
+## Slice 3 outcome — M5 diff engine (2026-05-28)
+
+**Status:** Shipped on `feat/m0-m3-validator-slice`. M6 next.
+
+### What landed
+
+4 tasks, 4 commits. Pure-function planner layer — no I/O, no network, no env.
+
+| Task | Files (src) | Tests | Net tests |
+|------|-------------|-------|-----------|
+| 5.1 desiredState | `src/planner/desiredState.ts` | `tests/planner.desiredState.test.ts` | +2 |
+| 5.2 currentState | `src/planner/currentState.ts` | `tests/planner.currentState.test.ts` | +2 |
+| 5.3 diff         | `src/planner/diff.ts` | `tests/diff.test.ts` | +5 |
+| 5.4 GTM payloads | `src/planner/desiredState.ts` (helpers added) | `tests/gtmPayloads.test.ts` | +3 |
+
+Final: **98 tests passing, 26 test files.** Clean build, clean typecheck.
+
+### Canonical internal model
+
+Shared by `desiredState`, `currentState`, `diff` — defined once in `desiredState.ts`, re-imported elsewhere:
+
+```ts
+NormalizedState = { ga4: { customDimensions, customMetrics, keyEvents }, gtm: { builtInVariables, variables, triggers, tags } }
+```
+
+Every entity is `{kind, name, config}`. `name` is the identity key; `config` is compared via `stableStringify`. All arrays sorted alphabetically by `name` so diff output is byte-stable across runs.
+
+### Diff classification rules
+
+- Missing in current → `create`
+- Identical `stableStringify(config)` → `unchanged`
+- Different `config` → `update` (records `before` + `after`)
+- Current-only entities are NOT classified as `delete` here — deletes are only valid when explicitly requested, and the destructive guard from M3 handles them at apply-time.
+- `skipped` / `blocked` lists stay empty in this layer; the M6 apply orchestrator populates them when a guard blocks an otherwise-classified entity. `warnings` likewise empty.
+
+### Known normalization gaps (refine in M6 as real data shows up)
+
+These were called out by the implementing subagent. They are acceptable for M5 (diff output is still deterministic and useful) but worth a follow-up pass once the apply orchestrator can resolve trigger IDs:
+
+1. **GTM trigger `eventName` is absent in normalized current state.** Real GTM API triggers carry the event name inside `customEventFilter` rather than at the top level. Until the parser is enriched, desired-vs-current triggers will diff as `update` even when logically identical.
+2. **GTM tag `trigger` field is empty string in normalized current state.** GTM returns numeric `firingTriggerId` arrays, not the human-readable trigger names used in specs. ID→name resolution belongs to the apply orchestrator in M6.
+3. **Trigger type case mismatch.** Spec uses `custom_event` (snake_case); GTM API uses `customEvent` (camelCase). `currentState` keeps the GTM representation as-is. The `TRIGGER_TYPE_MAP` reverse mapping is the M6 fix.
+
+Net effect: in M5 the diff over-reports `update` for GTM triggers and tags. The deterministic comparison and `create`/`unchanged` paths are unaffected. M6 will tighten this when it resolves trigger IDs.
+
+### GTM payload helpers shipped (used by M6 apply)
+
+- `desiredVariableToGtmPayload(v)` → `{name, type: "v", parameter: [{name}, {dataLayerVersion}]}`
+- `desiredTriggerToGtmPayload(t)` → maps `custom_event` → `customEvent`, expands filters to `customEventFilter` with `arg0`/`arg1` parameters
+- `desiredTagToGtmPayload(tg)` → `{name, type, parameter: [{eventName}, {measurementId}?, ...{params}], firingTriggerId: [trigger]}`
+
+### Verification (this milestone)
+
+```
+npm test               # → 98 passing
+npm run typecheck      # → no errors
+npm run build          # → dist/ populated
+```

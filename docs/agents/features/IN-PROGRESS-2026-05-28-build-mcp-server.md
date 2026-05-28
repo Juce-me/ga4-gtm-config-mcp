@@ -2419,3 +2419,66 @@ npm test               # → 98 passing
 npm run typecheck      # → no errors
 npm run build          # → dist/ populated
 ```
+
+---
+
+## Slice 4 outcome — M6 apply engine (2026-05-28)
+
+**Status:** Shipped on `feat/m0-m3-validator-slice`. M7 next.
+
+### What landed
+
+6 tasks, 6 commits.
+
+| Task | Files (src) | Tests | Net tests |
+|------|-------------|-------|-----------|
+| 6.4 versions | `src/gtm/versions.ts` | `tests/gtm.versions.test.ts` | +2 |
+| 6.5 preview | `src/gtm/preview.ts` | `tests/gtm.preview.test.ts` | +2 |
+| 6.6 publish | `src/gtm/publish.ts` | `tests/gtm.publish.test.ts` | +2 |
+| 6.2 GTM upserts | `src/gtm/upsertResult.ts` + additions to `{builtInVariables,variables,triggers,tags}.ts` | `tests/gtm.upserts.test.ts` | +5 |
+| 6.3 GA4 upserts | additions to `src/ga4/{customDimensions,customMetrics,keyEvents}.ts` | `tests/ga4.upserts.test.ts` | +6 |
+| 6.1 applyPlan | `src/planner/applyPlan.ts` | `tests/planner.applyPlan.test.ts` | +5 |
+
+Final: **120 tests passing, 32 test files.** Clean typecheck, clean build.
+
+### Safety contracts enforced
+
+- **`createVersion` refuses `workspaceId === "0"`** before touching the API. `workspaces.create_version` REMOVES the workspace — running it against the live workspace would be catastrophic. Test pins the refusal AND that no API call is made.
+- **`publishVersion` refuses unless `INCLUDE_PUBLISH_SCOPE=1`** at runtime, on top of the same env check `buildAuth` enforces at scope-construction time. Two defense layers. Test pins both that the API isn't called when the env isn't set AND that it IS called when the env is set.
+- **`getPreviewInfo` only calls `workspaces.get`** — never `create_version`, never `publish`. Test confirms by spying on every method.
+- **`applyPlan` with `dryRun: true` makes ZERO writer calls.** Test pins `callsMade === 0` AND the spy's `calls` array stays empty. Every `create`/`update` entry becomes `skipped`.
+- **`upsertCustomDimension` throws `API_UNSUPPORTED` rather than attempting to mutate immutable fields** (`parameterName`, `scope`). GA Admin does not allow changing them; the upsert surfaces a clear error instead of an API failure.
+- **No `archive*` functions are exported anywhere** in `src/ga4/`. The test for `keyEvents` pins this; manual check confirms `customDimensions.ts` and `customMetrics.ts` do not expose archive either.
+
+### Architecture: applyPlan as a pure dispatcher
+
+`applyPlan` is intentionally a thin dispatcher:
+
+- It does NOT consult M3 safety guards (destructive, consent). The M7 tool wrapper runs those on the diff BEFORE handing it to `applyPlan`.
+- It does NOT call `audit()` itself. M7 owns the audit boundary so callers know whether this was a GA4 apply or a GTM apply.
+- It accepts a `Writers` dependency interface so tests can swap in spies. M7 will partially-apply the real Google clients when constructing the `writers` object so the orchestrator doesn't have to thread them.
+
+This separation keeps `applyPlan` testable as a pure function of `(diff, dryRun, writers, currentRaw) → ApplyPlanResult`.
+
+### `ApplyPlanResult` shape
+
+```ts
+{
+  applied: number,         // entities written successfully
+  skipped: number,         // would-be writes that didn't run (dry_run or already-skipped)
+  blocked: number,         // unknown kinds, throws from writers
+  unchanged: number,       // no-op (already correct)
+  callsMade: number,       // total writer invocations (==0 under dry_run)
+  details: Array<{ kind, name, outcome: "applied"|"skipped"|"blocked"|"unchanged", reason? }>
+}
+```
+
+`details` preserves input order so the summary is deterministic across runs with the same diff.
+
+### Verification (this milestone)
+
+```
+npm test               # → 120 passing
+npm run typecheck      # → no errors
+npm run build          # → dist/ populated
+```

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { assertSafeToolMetadata } from "../src/safety/toolMetadataGuards.js";
+import { buildServer } from "../src/server.js";
 
 describe("toolMetadataGuards.assertSafeToolMetadata", () => {
   it("accepts a well-labeled read-only tool", () => {
@@ -80,5 +81,32 @@ describe("toolMetadataGuards.assertSafeToolMetadata", () => {
       description: "[read-only] Force the change through.",
       hasApprovalToken: false,
     }])).toThrow();
+  });
+});
+
+describe("toolMetadataGuards: live registered tool set", () => {
+  it("every tool registered by buildServer passes the static guard", () => {
+    const { tools } = buildServer();
+    expect(() => assertSafeToolMetadata(tools)).not.toThrow();
+  });
+
+  it("every [gated] / [gated dangerous] tool declares approval_token in its input schema", () => {
+    const { tools } = buildServer();
+    for (const t of tools) {
+      if (t.description.startsWith("[gated")) {
+        expect(t.hasApprovalToken).toBe(true);
+      }
+    }
+  });
+
+  it("no tool description leaks unsafe phrases (live snapshot)", () => {
+    const { tools } = buildServer();
+    const lower = tools.map((t) => t.description.toLowerCase());
+    for (const desc of lower) {
+      expect(desc.includes("bypass")).toBe(false);
+      expect(desc.includes("ignore approval")).toBe(false);
+      expect(desc.includes("skip validation")).toBe(false);
+      expect(/\bforce\b/.test(desc)).toBe(false);
+    }
   });
 });

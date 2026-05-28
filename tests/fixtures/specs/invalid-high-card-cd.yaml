@@ -1,0 +1,212 @@
+---
+status: planned
+type: ga4_gtm_mcp_execution_spec
+version: 1
+
+target:
+  environment: "dev"
+  ga4_property_id: "properties/000000000"
+  web_stream_id: "properties/000000000/dataStreams/0000000000"
+  measurement_id: "G-XXXXXXX000"
+  gtm_account_id: "accounts/0000000"
+  gtm_web_container_id: "accounts/0000000/containers/0000000"
+
+source_artifacts:
+  design_plan: "docs/agents/features/PLANNED-ga4-instrumentation.md"
+  setup_runbook: "docs/agents/features/PLANNED-ga4-instrumentation-runbook.md"
+  analytics_contract: "docs/README_ANALYTICS.md"
+
+execution:
+  mode: "dry_run"
+  workspace_name: "ga4-instrumentation-2026-01-01"
+  publish_allowed: false
+  require_human_approval: true
+  approval_token_required: true
+  destructive_changes_allowed: false
+  create_container_version_allowed: false
+  note: "Creating a GTM container version is not the same as dry-run. Enable only after workspace diff and preview validation are approved."
+
+preflight:
+  required:
+    - "source_plan_and_runbook_exist"
+    - "target_ids_are_placeholders_or_operator_supplied"
+    - "gtm_workspace_capacity_checked"
+    - "gtm_current_state_read"
+    - "ga4_current_state_read"
+    - "measurement_id_matches_target_stream"
+    - "no_conflicting_workspace_changes_detected"
+
+ga4_admin:
+  custom_dimensions:
+    - display_name: "Feature name"
+      parameter_name: "feature_name"
+      scope: "EVENT"
+      description: "Top-level product area approved in the design plan."
+      decision: "D1"
+      source_catalog_row: "events.md#feature-name"
+    - display_name: "User ID"
+      parameter_name: "user_id"
+      scope: "USER"
+      description: "High-cardinality user identifier — disallowed."
+      decision: "D9"
+  custom_metrics:
+    - display_name: "Result time seconds"
+      parameter_name: "time_seconds"
+      scope: "EVENT"
+      unit: "STANDARD"
+      description: "Duration in seconds approved in the design plan."
+      decision: "D2"
+      source_catalog_row: "events.md#result-time-seconds"
+  key_events:
+    - event_name: "result_view"
+      decision: "D3"
+  measurement_protocol:
+    enabled: false
+    api_secret:
+      action: "manual_create_or_mcp_create_placeholder"
+      secret_value: "NEVER_STORE_SECRET_IN_SPEC"
+      handling_note: "If created by MCP, return the secret only through the operator's secure secret channel. Do not write the real secret back into this spec."
+
+gtm_web:
+  enabled: true
+
+  built_in_variables:
+    - "Page URL"
+    - "Page Path"
+    - "Page Title"
+    - "Referrer"
+
+  data_layer_variables:
+    - name: "DLV - event_type"
+      data_layer_variable_name: "event_type"
+      version: 2
+      purpose: "trigger filter only"
+    - name: "DLV - event_name"
+      data_layer_variable_name: "event_name"
+      version: 2
+      purpose: "GA4 event name source"
+    - name: "DLV - feature_name"
+      data_layer_variable_name: "feature_name"
+      version: 2
+      purpose: "approved event parameter"
+    - name: "DLV - screen_name"
+      data_layer_variable_name: "screen_name"
+      version: 2
+      purpose: "approved event/page context"
+    - name: "DLV - userParams.page_name"
+      data_layer_variable_name: "userParams.page_name"
+      version: 2
+      purpose: "logical page name only when approved"
+
+  triggers:
+    - name: "CE - userevent - pageview"
+      type: "custom_event"
+      event_name: "userevent"
+      filters:
+        - variable: "DLV - event_type"
+          operator: "equals"
+          value: "pageview"
+
+    - name: "CE - userevent - event"
+      type: "custom_event"
+      event_name: "userevent"
+      filters:
+        - variable: "DLV - event_type"
+          operator: "equals"
+          value: "event"
+
+  tags:
+    - name: "GA4 - Page View"
+      type: "ga4_event"
+      measurement_id: "G-XXXXXXX000"
+      event_name: "page_view"
+      trigger: "CE - userevent - pageview"
+      params:
+        page_name: "{{DLV - userParams.page_name}}"
+
+    - name: "GA4 - User Event"
+      type: "ga4_event"
+      measurement_id: "G-XXXXXXX000"
+      event_name: "{{DLV - event_name}}"
+      trigger: "CE - userevent - event"
+      params:
+        feature_name: "{{DLV - feature_name}}"
+        screen_name: "{{DLV - screen_name}}"
+
+  ecommerce:
+    enabled: false
+    trigger: "ga4_ecommerce"
+    allowed_event_names:
+      - "purchase"
+      - "refund"
+    note: "Enable only when real revenue ecommerce is approved in the design plan. Do not create fake purchases or value=0 ecommerce events."
+
+sgtm:
+  enabled: false
+  endpoint: "https://analytics.example.com"
+  container_id: "<server-container-id>"
+  clients: []
+  tags: []
+  transformations: []
+  note: "Do not fill this section unless sGTM is selected in the design plan and exact client/tag/template behavior is documented."
+
+validation:
+  forbidden_keys:
+    exact:
+      - "email"
+      - "name"
+      - "phone"
+      - "ip"
+      - "user_agent"
+    contains:
+      - "token"
+      - "secret"
+      - "password"
+      - "client_secret"
+      - "oauth"
+      - "auth"
+    patterns:
+      - ".@.\\.."
+      - ".\\?.=."
+
+  required_checks:
+    - "dry_run_diff_generated"
+    - "source_plan_and_runbook_exist"
+    - "no_raw_pii"
+    - "no_raw_secrets"
+    - "no_universal_analytics_fields"
+    - "no_unapproved_custom_dimensions"
+    - "no_high_cardinality_custom_dimensions"
+    - "normal_events_use_reusable_userevent_paths"
+    - "no_per_event_gtm_tag_explosion"
+    - "gtm_workspace_capacity_checked"
+    - "gtm_workspace_created_before_changes"
+    - "gtm_preview_created_before_publish"
+    - "measurement_id_matches_target_stream"
+    - "data_layer_timing_validated"
+    - "consent_settings_not_modified_unless_approved"
+    - "publish_blocked_without_explicit_approval"
+
+  publish_gate:
+    default_allowed: false
+    requires_human_approval: true
+    requires_approval_token: true
+    requires_successful_preview: true
+    requires_validation_pass: true
+    requires_diff_review: true
+
+  destructive_change_guard:
+    delete_gtm_entities: false
+    archive_ga4_custom_definitions: false
+    patch_existing_prod_tags_without_override: false
+
+  pii_guard:
+    disallow_raw_email: true
+    disallow_raw_ip: true
+    disallow_full_url_with_query_string: true
+    disallow_user_id_as_custom_dimension: true
+
+  consent_change_guard:
+    modify_consent_settings: false
+    modify_consent_initialization_tags: false
+    note: "Consent settings require explicit approval in the design plan."

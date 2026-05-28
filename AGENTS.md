@@ -187,8 +187,7 @@ This is an execution layer, not an analytics planner. It must not invent events,
 - Node.js >= 20 LTS.
 - npm (lockfile committed; exact pinned versions, no `^` ranges).
 - Runtime entrypoint: `dist/server.js` after `npm run build`. The MCP transport is stdio.
-- Core deps: `@modelcontextprotocol/sdk` 1.29.0, `zod` 4.4.3, `yaml` 2.9.0.
-- `googleapis` is intentionally NOT a dependency in the current slice (M0–M3 ships validation + safety only). It will be added in milestone M4 when Google API integration begins.
+- Core deps: `@modelcontextprotocol/sdk` 1.29.0, `googleapis` 172.0.0, `zod` 4.4.3, `yaml` 2.9.0.
 
 ### Commands
 - Install: `npm install`
@@ -199,7 +198,7 @@ This is an execution layer, not an analytics planner. It must not invent events,
 
 ### Layout
 - Project root: `/Users/juce/Documents/devs/ga4-gtm-config-mcp` (this directory).
-- Source: `src/` — subdirs `utils/` (errors, redact, stableJson, logger, names), `spec/` (zod schema, readSpec, validateSpec, summarize), `safety/` (9 guards), `tools/` (MCP tool registrations).
+- Source: `src/` — subdirs `utils/` (errors, redact, stableJson, logger, names), `spec/` (zod schema, readSpec, validateSpec, summarize), `safety/` (9 guards), `auth/` (scopes + GoogleAuth factory), `ga4/` (Admin client + read/upsert wrappers), `gtm/` (Tag Manager client + read/upsert/version/preview/publish wrappers), `planner/` (desiredState, currentState, diff, applyPlan), `tools/` (12 MCP tool registrations).
 - Tests: `tests/` (vitest), with `tests/fixtures/specs/*.yaml` for spec fixtures.
 - Build output: `dist/` (gitignored).
 - Audit log: `.audit/audit-YYYY-MM-DD.log` (gitignored; one JSON line per safety event, written through `utils/redact`).
@@ -221,7 +220,7 @@ This is an execution layer, not an analytics planner. It must not invent events,
 - Tag.type at the zod schema layer is `z.string()` (free); disallowed types (consent, UA-era) are rejected by `validateSpec` with the correct semantic error code, not a generic schema error.
 
 ### Git workflow
-- Solo dev, feature-branch convention emerging. Current active branch for the validator slice: `feat/m0-m3-validator-slice`. Plan execution commits one task at a time with conventional-commit prefixes (`feat(scope):`, `fix(scope):`, `docs(scope):`, `chore:`, `test(scope):`).
+- Solo dev, feature-branch convention emerging. The full M0–M8 server shipped on branch `feat/m0-m3-validator-slice` (kept past its original M0–M3 scope; commits append). Plan execution commits one task at a time with conventional-commit prefixes (`feat(scope):`, `fix(scope):`, `docs(scope):`, `chore:`, `test(scope):`).
 - Do not commit `.audit/`, `dist/`, `.env`, or `node_modules/` (all gitignored).
 
 ---

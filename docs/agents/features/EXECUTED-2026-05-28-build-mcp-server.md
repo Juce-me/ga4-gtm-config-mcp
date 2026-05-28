@@ -1,10 +1,10 @@
-Status: in-progress
+Status: executed
 Type: feature
 Author: minired-panda
 
 # Build the ga4-gtm-config-mcp Server — Implementation Plan
 
-> **Status note (2026-05-28):** Slice 1 (M0–M3 + the M3 wrap-up task 3.10) has shipped on branch `feat/m0-m3-validator-slice` — see the §Slice 1 outcome (M0–M3) section near the end of this file for what landed, what was deferred, and the verification commands run. Milestones M4–M8 remain planned for a follow-up pass.
+> **Status note (2026-05-28):** ALL milestones M0–M8 have shipped on branch `feat/m0-m3-validator-slice`. Slices 1–5 (M0–M7) are recorded in the §Slice outcome sections near the end of this file; M8 (examples, `.env.example`, README, this rename + outcome, AGENTS.md §10 refresh) is recorded in the §Outcome and §Current Accuracy sections at the very end. Final verification: `npm run typecheck`, `npm run build`, and `npm test` (123/123) all green; the built server boots with 12 tools. This artifact is now historical — shipped code, tests, and `README.md` are the source of truth.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -87,7 +87,7 @@ All paths are relative to repo root `/Users/juce/Documents/devs/ga4-gtm-config-m
 
 | File | Responsibility |
 |------|----------------|
-| `server.ts` | MCP server bootstrap; registers all 11 tools; connects stdio transport. |
+| `server.ts` | MCP server bootstrap; registers all 12 tools; connects stdio transport. |
 | `auth/scopes.ts` | Constants for read / edit / publish scope arrays. |
 | `auth/googleAuth.ts` | Build a `GoogleAuth` from env (service account file *or* OAuth refresh token); attaches scoped client. |
 | `spec/mcpExecutionSpec.schema.ts` | Zod schema for the entire spec; mirrors `examples/mcp-execution-spec-template.yaml`. |
@@ -2079,9 +2079,9 @@ Tools registered:
 
 ### Task 8.1: `examples/mcp-execution.example.yaml` + `.env.example`
 
-- [ ] **Step 1: Copy the validated fixture** to `examples/mcp-execution.example.yaml`. Leave demo IDs that are obviously placeholders (e.g. `properties/000000000`, `GTM-EXAMPLE`).
+- [x] **Step 1: Copy the validated fixture** to `examples/mcp-execution.example.yaml`. Leave demo IDs that are obviously placeholders (e.g. `properties/000000000`, `GTM-EXAMPLE`).
 
-- [ ] **Step 2: Write `.env.example`**
+- [x] **Step 2: Write `.env.example`** — see §Current Accuracy: shipped `.env.example` documents only the env vars the code actually reads (`GOOGLE_APPLICATION_CREDENTIALS`, `INCLUDE_PUBLISH_SCOPE`) and omits the unused OAuth/target-ID vars from the sketch below.
 
 ```env
 # One of the two auth paths below — do not commit real values.
@@ -2112,7 +2112,7 @@ INCLUDE_PUBLISH_SCOPE=
 
 Full README covering all sections required by the spec. Use the structure under §README outline below. Verify against `docs/AGENTS.md` Doc Review Criteria before commit.
 
-- [ ] **Step 1: Write the README.**
+- [x] **Step 1: Write the README.**
 - [ ] **Step 2: Commit.** `git commit -am "docs: full README — setup, workflows, safety, limitations"`
 
 ### README outline
@@ -2144,33 +2144,33 @@ Full README covering all sections required by the spec. Use the structure under 
 
 ### Task 8.3: Rename plan, write outcome, refresh `AGENTS.md` §10
 
-- [ ] **Step 1: Rename** `docs/agents/features/PLANNED-2026-05-28-build-mcp-server.md` → `EXECUTED-2026-05-28-build-mcp-server.md`. Add `## Outcome` and `## Current Accuracy` sections.
+- [x] **Step 1: Rename** `docs/agents/features/IN-PROGRESS-2026-05-28-build-mcp-server.md` → `EXECUTED-2026-05-28-build-mcp-server.md`. Add `## Outcome` and `## Current Accuracy` sections. (Source name corrected: the file was `IN-PROGRESS-*` by this point, not `PLANNED-*`.)
 
-- [ ] **Step 2: Update `AGENTS.md` §10 "Project context"** with verified stack, commands, layout. Remove the TODO stubs.
+- [x] **Step 2: Update `AGENTS.md` §10 "Project context"** with verified stack, commands, layout. (No TODO stubs remained — §10 was filled at M0–M3; this pass corrected the two stale facts: `googleapis` is now a listed core dep, and `src/` now lists all 8 subdirs.)
 
 - [ ] **Step 3: Final commit.** `git commit -am "docs: mark plan EXECUTED and refresh AGENTS.md project context"`
 
 ---
 
-## Acceptance Criteria (run before declaring complete)
+## Acceptance Criteria (verified 2026-05-28 at M8 completion)
 
-Verify each in order. Each must be **observed**, not assumed.
+Each item records the evidence observed this pass. Items marked "(via … test)" are verified by mocked unit tests in the passing suite — not by calls against a live Google account; a live end-to-end run against a real GA4 property + GTM container remains an operator step.
 
-- [ ] `npm install` succeeds with the pinned lockfile.
-- [ ] `npm run typecheck` passes with zero errors.
-- [ ] `npm test` passes with zero failures; coverage includes every safety guard test.
-- [ ] `npm run build` produces `dist/server.js`.
-- [ ] `node dist/server.js` starts and produces no stdout (stdio is the MCP transport); stderr shows a JSON `info` line per registered tool.
-- [ ] Configure the server in an MCP client (Claude Desktop or Inspector) and confirm exactly 11 tools appear, each with the labels listed in Milestone 7.
-- [ ] `validate_mcp_execution_spec` on `examples/mcp-execution.example.yaml` returns `ok`.
-- [ ] `diff_ga4_gtm_state` against a real (or fully-mocked) container returns a deterministic diff with zero writes.
-- [ ] `apply_gtm_workspace_changes` with `dry_run: true` makes zero API write calls.
-- [ ] `create_gtm_workspace` against a container at capacity returns `WORKSPACE_CAPACITY_BLOCKED`.
-- [ ] `create_gtm_container_version_gated` without `approval_token` returns `VERSION_CREATION_BLOCKED`.
-- [ ] `publish_gtm_version_gated` without `approval_token` returns `PUBLISH_BLOCKED`.
-- [ ] Every test in §Fixtures passes the expected outcome.
-- [ ] No file in `src/`, `tests/`, `examples/`, or `README.md` contains a real OAuth client ID/secret/refresh token, real GA4 property ID, real GTM account/container ID, or real MP secret value.
-- [ ] No file contains the string `event_category`, `event_action`, or `event_label` outside of `tests/fixtures/specs/invalid-ua-fields.yaml` and the validator that detects them.
+- [x] `npm install` succeeds with the pinned lockfile. (deps resolve; full suite runs against installed `node_modules`)
+- [x] `npm run typecheck` passes with zero errors. (exit 0)
+- [x] `npm test` passes with zero failures; coverage includes every safety guard test. (123/123, 32 files)
+- [x] `npm run build` produces `dist/server.js`. (present; server boots from it)
+- [x] `node dist/server.js` starts and produces no stdout (stdio is the MCP transport); stderr shows a JSON `info` line per registered tool. (0 stdout bytes; 12 `tool_registered` stderr lines)
+- [x] Configure the server in an MCP client and confirm exactly **12** tools appear, each with the labels listed in Milestone 7. (Corrected from "11" — the shipped surface is 12 tools. Count verified via `buildServer()` and on boot; live MCP-client wiring is a manual operator step.)
+- [x] `validate_mcp_execution_spec` on `examples/mcp-execution.example.yaml` returns `ok`. (`{ok:true, errors:[]}` via the built `dist/`)
+- [x] `diff_ga4_gtm_state` returns a deterministic diff with zero writes. (via `tests/diff.test.ts`, mocked state)
+- [x] `apply_gtm_workspace_changes` with `dry_run: true` makes zero API write calls. (via `tests/planner.applyPlan.test.ts` — pins `callsMade === 0`)
+- [x] `create_gtm_workspace` against a container at capacity returns `WORKSPACE_CAPACITY_BLOCKED`. (via `tests/workspaceGuards.test.ts`)
+- [x] `create_gtm_container_version_gated` without `approval_token` returns `VERSION_CREATION_BLOCKED`. (via `tests/versionGuards.test.ts` at the guard level; the tool wraps the guard and throws `VERSION_CREATION_BLOCKED`)
+- [x] `publish_gtm_version_gated` without `approval_token` returns `PUBLISH_BLOCKED`. (via `tests/publishGuards.test.ts` at the guard level; the tool wraps the guard and throws `PUBLISH_BLOCKED`)
+- [x] Every test in §Fixtures passes the expected outcome. (`tests/spec.validation.test.ts`, part of the 123)
+- [x] No file in `src/`, `tests/`, `examples/`, or `README.md` contains a real OAuth client ID/secret/refresh token, real GA4 property ID, real GTM account/container ID, or real MP secret value. (credential scan and ID scan both clean; the example spec uses obvious placeholders — `properties/000000000`, `G-XXXXXXX000`, `accounts/0000000`)
+- [x] No file contains the string `event_category`, `event_action`, or `event_label` outside of `tests/fixtures/specs/invalid-ua-fields.yaml` and the validator that detects them. (grep clean; the only other occurrence is this plan's embedded copy of the validator's constant list)
 
 ---
 
@@ -2571,3 +2571,62 @@ Live tool surface verified:
 node -e "import('./dist/server.js').then(m => { const {tools}=m.buildServer(); console.log(tools.length); })"
 # → 12
 ```
+
+---
+
+## Slice 6 outcome — M8 examples, README, polish (2026-05-28)
+
+**Status:** Shipped. This completes the plan; all milestones M0–M8 are done.
+
+### What landed
+
+| Task | File | Action |
+|------|------|--------|
+| 8.1 | `examples/mcp-execution.example.yaml` | Already present from a prior step; verified placeholder-safe and that it passes `validate_mcp_execution_spec` (`ok:true`). |
+| 8.1 | `.env.example` | Created. Documents only the env vars the code actually reads. |
+| 8.2 | `README.md` | Full rewrite (was an 11-line scaffolding stub): does/does-not, planner relationship, install, auth + scopes + publish opt-in, local run, MCP client config, the 12 tools, five workflows, every safety guard, known limitations, troubleshooting. |
+| 8.3 | `AGENTS.md` §10 | Corrected two stale facts (see Current Accuracy). |
+| 8.3 | this plan | Status → `executed`; top status note rewritten; "11 tools" → "12"; M8 + acceptance checkboxes resolved with evidence; this Outcome added; file renamed `IN-PROGRESS-*` → `EXECUTED-*`. |
+
+### Commands run during verify
+
+```
+npm run typecheck            # exit 0
+npm run build                # dist/server.js produced
+npm test                     # 123 passed (123), 32 files
+node dist/server.js </dev/null   # 0 stdout bytes; 12 tool_registered lines on stderr
+node -e "validateSpec(readSpec('examples/mcp-execution.example.yaml'))"   # {ok:true, errors:[]}
+grep credential/ID scans on README.md, .env.example, examples/   # clean
+```
+
+### Outcome meaning: Implemented with changes
+
+The result differs from the plan's M8 sketch in three honest ways, each to keep the docs matching the code:
+
+1. **`.env.example` documents only what is consumed.** Repo-wide, the only env var read anywhere is `INCLUDE_PUBLISH_SCOPE`; `GoogleAuth` picks up `GOOGLE_APPLICATION_CREDENTIALS` implicitly. The plan's sketch also listed an OAuth refresh-token path and `GA4_PROPERTY_ID`/`GTM_*` vars — none are read by any code (`src/auth/googleAuth.ts:19-22` notes OAuth is "not constructed here"). Documenting them would describe behavior that does not exist, so they are omitted with an explanatory comment. Target IDs are passed as explicit tool arguments.
+2. **The tool surface is 12, not 11.** The plan's prose said "11 tools" in two places; the implemented and live-verified surface is 12 (the M7 slice shipped both `read_ga4_state` and `read_gtm_state` plus the rest). Corrected in this file and the README.
+3. **README known-limitations are stated honestly**, including that OAuth auth is not yet wired and that the diff currently over-reports `update` for GTM triggers/tags (the M5 normalization gap), rather than implying a cleaner state than the code delivers.
+
+### Doc Review Criteria checked (per `docs/AGENTS.md`)
+
+`README.md` and `.env.example` are user-facing docs, so they were reviewed against the four dimensions:
+
+- **UI/UX wording & flow** — checked. Plain-language tool table and five end-to-end workflows; every error code in the troubleshooting section names the cause and the operator's next step.
+- **Backend/API correctness** — checked. Tool labels/summaries are the verbatim `description` strings from `src/tools/*`; scopes match `src/auth/scopes.ts`; the auth section states the service-account path is the only wired one; the example config reflects the real `dist/server.js` stdio entrypoint.
+- **Security & privacy** — checked. No secrets/tokens/real IDs in any shipped doc (scans clean); publish opt-in (`INCLUDE_PUBLISH_SCOPE=1`), the secret/PII guards, MP-secret handling, and the redacted audit log are all documented; `.env.example` carries placeholders only.
+- **Architecture & contracts** — checked. The planner-vs-executor boundary, the 12-tool contract with safety labels, the dry-run default, and the hard gates are documented as contracts. **Deferred finding:** the M5 trigger/tag normalization gap is documented as a known limitation rather than fixed (out of M8 scope; tracked in the §Slice 3 outcome).
+
+### Not done in this pass
+
+- **No git commit.** All M8 changes are staged in the working tree but uncommitted, pending the user's go-ahead on whether to land them as one `docs:` commit or as the plan's three separate commits (8.1 / 8.2 / 8.3). The three "Commit" steps in M8 remain unchecked above for this reason.
+
+---
+
+## Current Accuracy
+
+**Accurate as of 2026-05-28.** Shipped code, tests, and `README.md` are now the source of truth; this artifact is historical context.
+
+- The §Milestones, §File Structure, §Error Codes, and §Audit Log sections describe what shipped and remain accurate, with these noted refinements captured in the slice outcomes: `Tag.type` is a free `z.string()`, the MP-secret `action` accepts the planner's `manual_create_or_mcp_create_placeholder` literal, TypeScript is pinned to 5.9.3, and the two synthetic-input gate fixtures were tested inline rather than as YAML files.
+- `AGENTS.md` §10 previously stated `googleapis` was "intentionally NOT a dependency" and listed only four `src/` subdirs — both were left over from the M0–M3 slice and are now corrected (`googleapis@172.0.0` is a listed core dep; all eight subdirs are listed).
+- The "11 tools" figure that appeared in the §File Structure table and the original acceptance list was wrong; the real surface is 12 and is corrected throughout.
+- Known limitation still open: the diff over-reports `update` for GTM triggers and tags until trigger ID→name resolution lands (see §Slice 3 outcome). Documented in the README.

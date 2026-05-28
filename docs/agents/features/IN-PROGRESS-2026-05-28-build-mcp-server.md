@@ -1,8 +1,10 @@
-Status: planned
+Status: in-progress
 Type: feature
 Author: minired-panda
 
 # Build the ga4-gtm-config-mcp Server — Implementation Plan
+
+> **Status note (2026-05-28):** Slice 1 (M0–M3 + the M3 wrap-up task 3.10) has shipped on branch `feat/m0-m3-validator-slice` — see the §Slice 1 outcome (M0–M3) section near the end of this file for what landed, what was deferred, and the verification commands run. Milestones M4–M8 remain planned for a follow-up pass.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -210,8 +212,8 @@ Required events: `spec_loaded`, `validation_passed`, `validation_failed`, `diff_
 | `invalid-secret-in-spec.yaml` | A field value matches `oauth|token|secret`. | `SECRET_DETECTED` |
 | `invalid-high-card-cd.yaml` | Defines `user_id` as a custom dimension. | `PII_DETECTED` |
 | `invalid-per-event-tag.yaml` | One GA4 tag per product event. | `SPEC_INVALID` |
-| `invalid-publish-requested.yaml` | `publish_allowed: true` without approval. | `PUBLISH_BLOCKED` (at gate, not validator) |
-| `invalid-version-requested.yaml` | `create_container_version_allowed: true` without approval. | `VERSION_CREATION_BLOCKED` (at gate) |
+| `invalid-publish-requested.yaml` | `publish_allowed: true` without approval. | `PUBLISH_BLOCKED` (tested inline in `tests/publishGuards.test.ts` — no YAML fixture; gate input is a synthetic object, not a parsed spec) |
+| `invalid-version-requested.yaml` | `create_container_version_allowed: true` without approval. | `VERSION_CREATION_BLOCKED` (tested inline in `tests/versionGuards.test.ts` — no YAML fixture; gate input is a synthetic object, not a parsed spec) |
 | `invalid-consent-change.yaml` | Modifies consent tag config without approval. | `CONSENT_CHANGE_BLOCKED` |
 
 ---
@@ -2204,3 +2206,112 @@ Verify each in order. Each must be **observed**, not assumed.
 - **Type consistency** — `MCPError.code` uses the same 12 codes across tasks; `assertSafeToolMetadata` signature is consistent between 3.9 and 7.9; `applyPlan` signature is consistent between 6.1 and 7.4.
 
 No issues found; plan is complete.
+
+---
+
+## Slice 1 outcome (M0–M3, 2026-05-28)
+
+**Status:** Shipped on branch `feat/m0-m3-validator-slice`. M4–M8 remain planned.
+
+### What landed
+
+20 individual tasks across 4 milestones plus the M3.10 wrap-up, executed via `superpowers:subagent-driven-development` with TDD discipline. One commit per task (or per fix), conventional-commit messages.
+
+| Milestone | Files (src) | Files (tests) | Tests added |
+|-----------|-------------|---------------|-------------|
+| M0 — foundation | `src/server.ts` | `tests/server.boot.test.ts` | 2 |
+| M1 — utils | `src/utils/{errors,redact,stableJson,logger,names}.ts` | 4 test files | 11 |
+| M2 — spec | `src/spec/{mcpExecutionSpec.schema,readSpec,validateSpec,summarize}.ts` | 4 test files + 6 fixtures (1 valid, 5 invalid, 1 `_malformed`) | 14 |
+| M3 — safety | `src/safety/{piiGuards,destructiveChangeGuards,workspaceGuards,versionGuards,publishGuards,consentGuards,approvalGate,auditLog,toolMetadataGuards}.ts` | 9 test files | 35 (with post-review +3) |
+| M3 wrap-up | `src/tools/{readTools,validateTools}.ts` + rewrite `src/server.ts` | rewrite `tests/server.boot.test.ts` | 0 net (replaced 2) |
+
+Final: **68 tests passing, 20 test files, zero failures**, clean `npm run typecheck`, clean `npm run build`. Smoke test (`node dist/server.js`) emits three `tool_registered` JSON lines on stderr and zero bytes on stdout. End-to-end script confirmed every fixture returns the expected validation outcome.
+
+### Three MCP tools registered
+
+| Tool | Label | Behavior |
+|------|-------|----------|
+| `read_mcp_execution_spec` | `[read-only]` | Loads + parses + zod-validates the YAML at `{path}`. Returns parsed JSON or `MCPError(SPEC_INVALID)`. |
+| `validate_mcp_execution_spec` | `[read-only]` | Same load step, then runs `validateSpec` for semantic checks (UA fields, secrets, high-card dims, per-event-tag explosion, consent guard, missing target IDs). Returns `{ok, errors, warnings}`. |
+| `summarize_mcp_execution_spec` | `[read-only]` | Deterministic plain-text summary including all four execution gate booleans. |
+
+`assertSafeToolMetadata` runs at server boot AND in the unit test, so a future tool description regression is caught at startup.
+
+### Safety guards in place (used by M4+ tools when they land)
+
+- `piiGuards.findPiiViolations` — forbidden param keys + full-URL-with-query detection; allows the GTM `Referrer` built-in variable name (the violation is using raw referrer VALUES as params).
+- `destructiveChangeGuards.findDestructiveChanges` — flags deletes unless `destructive_changes_allowed: true`; archives are `API_UNSUPPORTED` regardless of the flag.
+- `workspaceGuards.assertWorkspaceSafe` + `checkCapacity` — rejects `workspaceId === "0"` and `name === "Default Workspace"` unconditionally; enforces GTM 3-workspace-per-container cap.
+- `versionGuards.gateVersionCreation`, `publishGuards.gatePublish` — multi-reason default-deny gates that surface every failing condition together.
+- `consentGuards.gateConsentChange` — blocks any consent-tag presence unless `validation.consent_change_guard.modify_consent_settings === true`.
+- `approvalGate.requireApprovalToken` — generic spec-flag + `approval_token` check for `publish` and `create_version` actions.
+- `auditLog.audit` — JSON-line writer to `.audit/audit-YYYY-MM-DD.log` (UTC); EVERY payload passes through `utils/redact` (now covers `private_key`/`credentials` after the post-review fix).
+- `toolMetadataGuards.assertSafeToolMetadata` — rejects unlabeled tool descriptions, unsafe phrases (`bypass`, `ignore approval`, `force` as a whole word, etc.), and `[gated*]` tools without `approval_token`.
+
+### Deferred to next pass (M4–M8)
+
+- `googleapis` dependency.
+- GA4 Admin and GTM v2 API clients + auth/scopes.
+- State normalization (`desiredState`, `currentState`) and the deterministic diff engine.
+- The apply orchestrator and GA4/GTM upsert helpers.
+- The remaining eight MCP tools (read GA4/GTM state, diff, create workspace, apply workspace/admin changes, preview, create version, publish).
+- `examples/mcp-execution.example.yaml`, `.env.example`, full README rewrite.
+
+### Decisions made during execution (worth knowing before the next pass)
+
+1. **`Tag.type` is `z.string()` at the schema layer**, not an enum. Disallowed types (consent, UA-era) parse OK and are rejected by `validateSpec` with the correct semantic error code instead of a generic `SPEC_INVALID`.
+2. **`MeasurementProtocol.api_secret.action` accepts the third literal `"manual_create_or_mcp_create_placeholder"`** because the planner template uses exactly that string. Original plan only had two values.
+3. **TypeScript pinned to 5.9.3** rather than the just-released 6.x line, for ecosystem maturity (zod v4 / vitest v3 / `@modelcontextprotocol/sdk` v1.29 are all known-working on TS 5.9).
+4. **Fixtures `invalid-publish-requested.yaml` and `invalid-version-requested.yaml` were not created.** The §Fixtures table now notes those scenarios are gate-tested inline with synthetic objects (they are not parsed-spec failures, so a YAML fixture doesn't help).
+5. **Two safety fixes landed after the final code review:** `utils/redact` now matches `private_key` / `credentials`; `toolMetadataGuards` uses a word-boundary regex for `force` so `"Enforces"` does not trip the guard.
+
+### Acceptance — M0–M3 checklist
+
+- [x] `npm install` succeeds; `googleapis` is not in the dependency tree.
+- [x] `npm run typecheck` passes (zero errors).
+- [x] `npm test` passes (68/68).
+- [x] `npm run build` produces `dist/server.js`.
+- [x] `node dist/server.js` boots, emits exactly three `tool_registered` JSON lines on stderr, zero bytes on stdout.
+- [x] Three tools registered: `read_mcp_execution_spec`, `validate_mcp_execution_spec`, `summarize_mcp_execution_spec`. Descriptions all start with `[read-only]` and pass `assertSafeToolMetadata`.
+- [x] `validate_mcp_execution_spec` on `valid-web-dry-run.yaml` returns `{ok: true, errors: []}`.
+- [x] `validate_mcp_execution_spec` on each of the five invalid fixtures returns the expected error code.
+
+### Current accuracy
+
+The plan accurately describes the M0–M3 work that shipped. The §File Structure and §Milestones 4–8 sections describe **planned** work and are unchanged — they remain the source of truth for the next pass. The three decisions above (schema flexibility, TS version pin, fixture coverage) are local refinements; the overall architecture, error taxonomy, safety posture, and tool surface are unchanged.
+
+### Verification commands run (reproducible)
+
+```
+git checkout feat/m0-m3-validator-slice
+npm install
+npm test            # → 68 passing
+npm run typecheck   # → no errors
+npm run build       # → dist/ populated
+timeout 1 node dist/server.js < /dev/null   # → 3 stderr lines, 0 stdout, exit 0 or 124
+```
+
+End-to-end fixture verification (run from project root after `npm run build`):
+
+```
+cat > .smoke.mjs <<'EOF'
+import { readSpec } from "./dist/spec/readSpec.js";
+import { validateSpec } from "./dist/spec/validateSpec.js";
+for (const f of ["valid-web-dry-run","invalid-ua-fields","invalid-secret-in-spec","invalid-high-card-cd","invalid-per-event-tag","invalid-consent-change"]) {
+  try { const r = validateSpec(await readSpec(`tests/fixtures/specs/${f}.yaml`)); console.log(f, r.ok ? "OK" : r.errors.map(e=>e.code)); }
+  catch (e) { console.log(f, "threw", e.code); }
+}
+EOF
+node .smoke.mjs && rm .smoke.mjs
+```
+
+Expected output (already confirmed):
+
+```
+valid-web-dry-run OK
+invalid-ua-fields [ 'SPEC_INVALID' ]
+invalid-secret-in-spec [ 'SECRET_DETECTED' ]
+invalid-high-card-cd [ 'PII_DETECTED' ]
+invalid-per-event-tag [ 'SPEC_INVALID' ]
+invalid-consent-change [ 'CONSENT_CHANGE_BLOCKED' ]
+```

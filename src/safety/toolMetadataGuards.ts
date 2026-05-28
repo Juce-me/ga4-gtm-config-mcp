@@ -12,16 +12,16 @@ const ALLOWED_LABELS = [
   "[gated dangerous]",
 ] as const;
 
-const UNSAFE_PHRASES = [
+const UNSAFE_PATTERNS: Array<string | RegExp> = [
   "bypass",
   "ignore approval",
   "skip validation",
-  "force",
+  /\bforce\b/i,
   "prompt-inject",
   "you should",
   "always",
   "must apply",
-] as const;
+];
 
 export function assertSafeToolMetadata(tools: ToolMeta[]): void {
   for (const tool of tools) {
@@ -33,9 +33,10 @@ export function assertSafeToolMetadata(tools: ToolMeta[]): void {
     }
 
     const lower = tool.description.toLowerCase();
-    for (const phrase of UNSAFE_PHRASES) {
-      if (lower.includes(phrase)) {
-        throw new Error(`Tool "${tool.name}" description contains unsafe phrase "${phrase}"`);
+    for (const pat of UNSAFE_PATTERNS) {
+      const hit = typeof pat === "string" ? lower.includes(pat) : pat.test(tool.description);
+      if (hit) {
+        throw new Error(`Tool "${tool.name}" description contains unsafe phrase ${pat instanceof RegExp ? pat.source : `"${pat}"`}`);
       }
     }
 

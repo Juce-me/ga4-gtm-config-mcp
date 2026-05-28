@@ -65,4 +65,20 @@ describe("toolMetadataGuards.assertSafeToolMetadata", () => {
       }])).not.toThrow();
     }
   });
+
+  it("does NOT flag the word 'enforce' (force false-positive regression test)", () => {
+    expect(() => assertSafeToolMetadata([{
+      name: "validate_x",
+      description: "[read-only] Enforces validation rules and returns findings.",
+      hasApprovalToken: false,
+    }])).not.toThrow();
+  });
+
+  it("still flags the bare word 'force'", () => {
+    expect(() => assertSafeToolMetadata([{
+      name: "x",
+      description: "[read-only] Force the change through.",
+      hasApprovalToken: false,
+    }])).toThrow();
+  });
 });

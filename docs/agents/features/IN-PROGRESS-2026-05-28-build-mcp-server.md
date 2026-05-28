@@ -2315,3 +2315,46 @@ invalid-high-card-cd [ 'PII_DETECTED' ]
 invalid-per-event-tag [ 'SPEC_INVALID' ]
 invalid-consent-change [ 'CONSENT_CHANGE_BLOCKED' ]
 ```
+
+---
+
+## Slice 2 outcome — M4 Google API clients (2026-05-28)
+
+**Status:** Shipped on `feat/m0-m3-validator-slice` (branch kept; commits append). M5 next.
+
+### What landed
+
+4 tasks, 4 commits (one per task). `googleapis@172.0.0` added as a pinned runtime dep.
+
+| Task | Files (src) | Files (tests) | Net tests |
+|------|-------------|---------------|-----------|
+| 4.1 auth | `src/auth/{scopes,googleAuth}.ts` | `tests/auth.test.ts` | +7 |
+| 4.2 ga4 client | `src/ga4/{capabilities,adminClient}.ts` | `tests/ga4.capabilities.test.ts` | +4 |
+| 4.3 ga4 readers | `src/ga4/{properties,streams,customDimensions,customMetrics,keyEvents,measurementProtocolSecrets}.ts` | `tests/ga4.measurementProtocolSecrets.test.ts` | +3 |
+| 4.4 gtm client + readers | `src/gtm/{tagManagerClient,accounts,containers,workspaces,builtInVariables,variables,triggers,tags}.ts` | `tests/gtm.workspaces.test.ts` | +4 |
+
+Final: **86 tests passing, 22 test files.** `npm test`, `typecheck`, `build` all clean.
+
+### Safety contracts enforced in this slice
+
+- **`buildAuth({mode:"publish"})` refuses unless `INCLUDE_PUBLISH_SCOPE=1`** in env. The publish OAuth scope cannot even be requested without explicit opt-in, completely independent of per-call approval tokens.
+- **`measurementProtocolSecrets.listMetadata` strips `secretValue` from every response entry** before returning, via the exported `stripSecretValue` helper. Even if a future GA Admin API change starts returning secret values on list, they are dropped at the wrapper boundary. Two tests pin this.
+- **`workspaceCapacity` integrates with M3's `checkCapacity`** — single source of truth for the 3-workspace-per-container GTM cap. Returns `{existing, max, freeSlots, capacityOk}`.
+- **`capabilityOf(op)`** returns `"unsupported"` for any unknown op via `?? "unsupported"`. `archive_custom_dimension` is explicitly listed as `unsupported` (never silently degraded).
+
+### Deferred to M5+
+
+- `versions.ts` (create_version — REMOVES workspace; M6 with hard gate).
+- `preview.ts` (manual checklist; M6).
+- `publish.ts` (M6 with INCLUDE_PUBLISH_SCOPE runtime check on top of scope gate).
+- Upsert helpers for tags/triggers/variables/built-in vars/CDs/CMs/key events (M6).
+- State normalization + diff engine (M5).
+
+### Verification (this milestone)
+
+```
+npm install            # adds googleapis 172.0.0 from package-lock
+npm test               # → 86 passing
+npm run typecheck      # → no errors
+npm run build          # → dist/ populated
+```

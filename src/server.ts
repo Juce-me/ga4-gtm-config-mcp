@@ -1,6 +1,10 @@
+// src/server.ts
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { z } from "zod";
+import { registerReadTools } from "./tools/readTools.js";
+import { registerValidateTools } from "./tools/validateTools.js";
+import { assertSafeToolMetadata, type ToolMeta } from "./safety/toolMetadataGuards.js";
+import { logger } from "./utils/logger.js";
 
 export function buildServer() {
   const server = new McpServer({
@@ -8,19 +12,14 @@ export function buildServer() {
     version: "0.1.0",
   });
 
-  const toolNames: string[] = [];
+  const tools: ToolMeta[] = [];
+  registerReadTools(server, tools);
+  registerValidateTools(server, tools);
 
-  server.registerTool(
-    "ping",
-    {
-      description: "[read-only] Returns pong. Placeholder used during scaffolding; remove once real tools land.",
-      inputSchema: {},
-    },
-    async () => ({ content: [{ type: "text", text: "pong" }] }),
-  );
-  toolNames.push("ping");
+  assertSafeToolMetadata(tools);
+  for (const t of tools) logger.info("tool_registered", { name: t.name });
 
-  return { server, toolNames };
+  return { server, tools };
 }
 
 async function main() {

@@ -2482,3 +2482,92 @@ npm test               # → 120 passing
 npm run typecheck      # → no errors
 npm run build          # → dist/ populated
 ```
+
+---
+
+## Slice 5 outcome — M7 MCP tools surface (2026-05-28)
+
+**Status:** Shipped on `feat/m0-m3-validator-slice`. M8 next.
+
+### What landed
+
+8 tasks, 8 commits. All twelve MCP tools wired and verified live.
+
+| Task | Files | Tests | Net tests |
+|------|-------|-------|-----------|
+| 7.1 read tools (ga4/gtm state) | `src/tools/readTools.ts` (extended) | — | 0 |
+| 7.3 diff tool | `src/tools/diffTools.ts` | — | 0 |
+| 7.4 apply tools | `src/tools/applyTools.ts` | — | 0 |
+| 7.5 preview tool | `src/tools/previewTools.ts` | — | 0 |
+| 7.6 version gated tool | `src/tools/versionTools.ts` | — | 0 |
+| 7.7 publish gated tool | `src/tools/publishTools.ts` | — | 0 |
+| 7.8 server wire + boot test | `src/server.ts` (rewritten), `tests/server.boot.test.ts` (updated) | reorganized | 0 (net) |
+| 7.9 live metadata test | `tests/toolMetadataGuards.test.ts` (appended) | new block | +3 |
+
+Final: **123 tests passing, 32 test files.** Clean typecheck, clean build.
+
+### Live tool set (12 tools)
+
+Verified via `buildServer()` import + `assertSafeToolMetadata` at boot:
+
+| Tool | Label | hasApprovalToken |
+|------|-------|------------------|
+| `read_mcp_execution_spec` | `[read-only]` | false |
+| `validate_mcp_execution_spec` | `[read-only]` | false |
+| `summarize_mcp_execution_spec` | `[read-only]` | false |
+| `read_ga4_state` | `[read-only]` | false |
+| `read_gtm_state` | `[read-only]` | false |
+| `diff_ga4_gtm_state` | `[read-only]` | false |
+| `create_gtm_workspace` | `[write — non-live workspace only]` | false |
+| `apply_gtm_workspace_changes` | `[dry-run-capable write]` | false |
+| `apply_ga4_admin_changes` | `[dry-run-capable write]` | false |
+| `get_gtm_preview_info` | `[read-only]` | false |
+| `create_gtm_container_version_gated` | `[gated dangerous]` | **true** |
+| `publish_gtm_version_gated` | `[gated dangerous]` | **true** |
+
+Only the two `_gated` tools require `approval_token` in their Zod input schema. Live metadata test (7.9) imports `buildServer` and runs the guard against the actual registered set so a future regression in any tool's description is caught at `npm test`.
+
+### Apply path threading (M7.4)
+
+Both apply tools follow the same defensive shape:
+
+1. `readSpec` (M2) — fails fast on bad YAML / schema.
+2. `validateSpec` (M2) — fails on UA fields, secrets, high-card dims, per-event-tag explosion, missing target IDs, consent guard.
+3. `gateConsentChange` (M3) — runs again at apply boundary (defense in depth).
+4. `assertWorkspaceSafe` / `workspace_id === "0"` rejection (M3 + tool layer).
+5. Read current state from GA4/GTM (M4 wrappers).
+6. `toDesiredState` + `toCurrentState` + `diffStates` (M5).
+7. `findDestructiveChanges` (M3) on the diff — refuses deletes/archives unless explicitly approved.
+8. `applyPlan` (M6) with the appropriate `Writers` adapters. `dry_run: true` by default → zero writer calls.
+9. `audit("gtm_apply_summary"|"ga4_apply_summary", ...)` records the result.
+
+The GA4 apply tool sets every GTM writer in its `Writers` object to a no-op `{action: "unchanged"}` (and vice versa for the GTM apply tool). This is the cheapest way to scope `applyPlan`'s dispatcher to one domain at a time without forking the orchestrator.
+
+### Gated tools (M7.6 + M7.7)
+
+Both gated tools follow the same pattern:
+
+1. Load spec.
+2. Call the corresponding M3 gate (`gateVersionCreation` / `gatePublish`) with EVERY required field.
+3. If gate returns `{ok: false}`, audit `version_blocked` / `publish_blocked` with all reasons, throw `MCPError`.
+4. If gate passes, build the appropriate auth-scoped client and call the underlying M6 wrapper (`createVersion` / `publishVersion`). Those wrappers add their OWN safety checks (workspace ID != 0 for version, `INCLUDE_PUBLISH_SCOPE=1` env for publish) — defense in depth.
+5. On success, audit `version_created` / `publish_succeeded` and return the result + the manual validation checklist (for version creation).
+
+### Preview tool (M7.5) — graceful API-failure path
+
+If GTM API auth isn't configured, `get_gtm_preview_info` does NOT crash — it returns the manual validation checklist alone with a `note` field explaining the API call failed. This is deliberate: operators can still see "here's what to verify by hand" even without API access, and fabricating a preview URL would be worse than honest "no API available."
+
+### Verification (this milestone)
+
+```
+npm test               # → 123 passing
+npm run typecheck      # → no errors
+npm run build          # → dist/ populated
+```
+
+Live tool surface verified:
+
+```
+node -e "import('./dist/server.js').then(m => { const {tools}=m.buildServer(); console.log(tools.length); })"
+# → 12
+```

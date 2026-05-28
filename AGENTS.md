@@ -183,36 +183,45 @@ Custom MCP server for safe GA4 and Google Tag Manager configuration automation. 
 This is an execution layer, not an analytics planner. It must not invent events, tracking strategy, custom dimensions, or GTM architecture.
 
 ### Stack
-- TODO: No application stack has been verified yet.
-- TODO: No package manager has been verified yet.
-- TODO: No runtime entrypoint has been verified yet.
+- TypeScript 5.9.x, ESM, `module/moduleResolution: NodeNext`, `strict + noUncheckedIndexedAccess`.
+- Node.js >= 20 LTS.
+- npm (lockfile committed; exact pinned versions, no `^` ranges).
+- Runtime entrypoint: `dist/server.js` after `npm run build`. The MCP transport is stdio.
+- Core deps: `@modelcontextprotocol/sdk` 1.29.0, `googleapis` 172.0.0, `zod` 4.4.3, `yaml` 2.9.0.
 
 ### Commands
-- Install: TODO
-- Build: TODO
-- Test: TODO
-- Lint/typecheck: TODO
-- Run locally: TODO
-
-No `package.json`, `pyproject.toml`, `Cargo.toml`, or `Makefile` exists in this project yet. Add verified commands here when the project adds them.
+- Install: `npm install`
+- Build: `npm run build` (TypeScript → `dist/`)
+- Test: `npm test` (vitest, run-mode; `npm run test:watch` for watch)
+- Typecheck: `npm run typecheck`
+- Run locally: `npm run dev` (build + run) or `npm run mcp` (run prebuilt). Server speaks MCP over stdio.
 
 ### Layout
-- Project root: TODO
-- Source: TODO
-- Tests: TODO
-- Docs: `docs/AGENTS.md` defines agent work artifact rules and doc-review criteria; agent artifacts live under `docs/agents/features/`, `docs/agents/prompts/`, `docs/agents/bugfixes/`, and `docs/agents/reviews/`; `postmortem/` contains the postmortem workflow.
+- Project root: `/Users/juce/Documents/devs/ga4-gtm-config-mcp` (this directory).
+- Source: `src/` — subdirs `utils/` (errors, redact, stableJson, logger, names), `spec/` (zod schema, readSpec, validateSpec, summarize), `safety/` (9 guards), `auth/` (scopes + GoogleAuth factory), `ga4/` (Admin client + read/upsert wrappers), `gtm/` (Tag Manager client + read/upsert/version/preview/publish wrappers), `planner/` (desiredState, currentState, diff, applyPlan), `tools/` (12 MCP tool registrations).
+- Tests: `tests/` (vitest), with `tests/fixtures/specs/*.yaml` for spec fixtures.
+- Build output: `dist/` (gitignored).
+- Audit log: `.audit/audit-YYYY-MM-DD.log` (gitignored; one JSON line per safety event, written through `utils/redact`).
+- Docs: `docs/AGENTS.md` defines agent work artifact rules; agent artifacts live under `docs/agents/features/`, `docs/agents/prompts/`, `docs/agents/bugfixes/`, `docs/agents/reviews/`. `postmortem/` contains the postmortem workflow.
 
 ### Conventions
 - Reusable rules and design guidance belong at the highest applicable `AGENTS.md`; subfolder `AGENTS.md` files are for local constraints only.
 - Keep `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md` aligned at the root and in subfolders; `CLAUDE.md` and `GEMINI.md` should point to the local `AGENTS.md`.
 - Agent work artifacts under `docs/agents/` use the `STATUS-summary.md` (or `STATUS-YYYY-MM-DD-summary.md`) naming defined in `docs/AGENTS.md`. Subfolder `AGENTS.md` files cannot redefine this scheme.
-- TODO: Add additional project conventions after they are visible in code or config.
+- ESM module imports include the `.js` suffix (NodeNext resolution requires this even from `.ts` source). Example: `import { readSpec } from "../spec/readSpec.js";`.
+- The `logger` writes to `process.stderr` only — `process.stdout` is reserved for the MCP stdio transport. Do not `console.log` from `src/`.
+- Errors surfaced to MCP tool consumers are `MCPError` instances with one of the 12 codes in `src/utils/errors.ts`. Tools serialize them via `error.toJSON()` and return `{ isError: true }`.
+- Tool descriptions registered on the MCP server MUST start with one of: `[read-only]`, `[dry-run-capable write]`, `[write — non-live workspace only]`, `[gated]`, `[gated dangerous]`. `assertSafeToolMetadata` enforces this at boot and in tests.
 
 ### Repo-specific constraints
-- TODO: Add constraints only after they are verified for this project.
+- No raw secret values may appear in source, tests, fixtures, or audit log. The `secret_value` field in the spec is constrained at the zod level to the literal string `"NEVER_STORE_SECRET_IN_SPEC"`.
+- Every gated dangerous tool requires both a spec-level boolean flag AND a per-call `approval_token`. Gates return ALL failing reasons, never just the first.
+- The live/default GTM workspace (`workspaceId: "0"` or name `"Default Workspace"`) is unconditionally rejected by `assertWorkspaceSafe`.
+- Tag.type at the zod schema layer is `z.string()` (free); disallowed types (consent, UA-era) are rejected by `validateSpec` with the correct semantic error code, not a generic schema error.
 
 ### Git workflow
-- TODO: Document branch and PR workflow when one is established.
+- Solo dev, feature-branch convention emerging. The full M0–M8 server shipped on branch `feat/m0-m3-validator-slice` (kept past its original M0–M3 scope; commits append). Plan execution commits one task at a time with conventional-commit prefixes (`feat(scope):`, `fix(scope):`, `docs(scope):`, `chore:`, `test(scope):`).
+- Do not commit `.audit/`, `dist/`, `.env`, or `node_modules/` (all gitignored).
 
 ---
 

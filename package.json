@@ -1,0 +1,32 @@
+{
+  "name": "ga4-gtm-config-mcp",
+  "version": "0.1.0",
+  "description": "Safe GA4/GTM configuration MCP server. Consumes approved mcp-execution.yaml specs from google-analytics-implementation-planner.",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "ga4-gtm-config-mcp": "dist/server.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "mcp": "node dist/server.js",
+    "dev": "tsc -p tsconfig.json && node dist/server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "googleapis": "172.0.0",
+    "yaml": "2.9.0",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "25.9.1",
+    "typescript": "5.9.3",
+    "vitest": "3.2.4"
+  }
+}

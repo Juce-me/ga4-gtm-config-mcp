@@ -145,13 +145,40 @@ For keyless production auth, use an external-account credential file from Worklo
 
 This token is only for `npm run bootstrap:access`. It must not be placed in `.env`, MCP config, audit logs, or any persistent file.
 
-Create a Web application OAuth client and add this authorized redirect URI:
+Create a Web application OAuth client in the same Google Cloud project:
+
+Use these Cloud Console pages and make sure the intended project is selected in the project picker:
+
+- [Google Auth Platform overview](https://console.cloud.google.com/auth/overview)
+- [Google Auth Platform clients](https://console.cloud.google.com/auth/clients)
+- [Google Auth Platform branding](https://console.cloud.google.com/auth/branding)
+- [Google Auth Platform audience / test users](https://console.cloud.google.com/auth/audience)
+- [Classic APIs & Services credentials page](https://console.cloud.google.com/apis/credentials)
+
+Steps:
+
+1. Open **Google Auth Platform > Clients** in Google Cloud Console.
+2. If prompted to configure Google Auth first, open **Branding** and enter a minimal app name such as `GA4 GTM MCP Bootstrap`, a user support email, and a developer contact email.
+3. Open **Audience**. Use `Internal` only if the human GA4/GTM admin account belongs to the same Google Workspace organization as the Cloud project. Otherwise use `External` in Testing and add the human GA4/GTM admin account as a test user.
+4. Click **Create client**.
+5. Choose **Web application**.
+6. Add this authorized redirect URI:
 
 ```text
 https://developers.google.com/oauthplayground
 ```
 
-If the OAuth app is in Testing, add the admin Google account as a test user. Public apps using sensitive scopes can require Google verification.
+7. Click **Create**.
+8. Copy the `Client ID` and `Client secret` from the creation dialog. These are the values to paste into OAuth Playground settings. Do not put them in `.env` or MCP config.
+
+If you closed the dialog:
+
+1. Return to [Google Auth Platform clients](https://console.cloud.google.com/auth/clients).
+2. Click the Web application client you created.
+3. Copy the `Client ID` from the client details page.
+4. If the full `Client secret` is no longer visible, create a new secret from the client details page and copy it immediately, or create a replacement Web application client. Google may only show/download new client secrets at creation time.
+
+If the OAuth app is in Testing, open **Google Auth Platform > Audience** and add the human GA4/GTM admin account as a test user. Public apps using sensitive scopes can require Google verification.
 
 Official references:
 
@@ -162,18 +189,41 @@ Official references:
 
 In [OAuth 2.0 Playground](https://developers.google.com/oauthplayground):
 
-1. Open settings and enable `Use your own OAuth credentials`.
-2. Enter the OAuth client ID and client secret.
-3. Authorize these exact scopes:
+1. Open settings with the gear icon.
+2. Enable `Use your own OAuth credentials`.
+3. Set `OAuth flow` to `Server-side`.
+4. If the settings dialog exposes `Access type`, set it to `Online`. If it still returns a refresh token, ignore it and do not store it.
+5. Enter the OAuth client ID and client secret.
+6. Close settings.
+7. In **Step 1 - Select & authorize APIs**, paste these exact scopes into the manual scope input:
 
 ```text
 https://www.googleapis.com/auth/analytics.manage.users
 https://www.googleapis.com/auth/tagmanager.manage.users
 ```
 
-4. Sign in as the human admin who already has GA4/GTM user-management rights.
-5. Exchange the authorization code for tokens.
-6. Copy only the access token into the `bootstrap:access` prompt. Do not store the refresh token.
+8. Click **Authorize APIs**.
+9. Sign in as the human admin who already has GA4/GTM user-management rights.
+10. Accept the consent prompt.
+11. In **Step 2 - Exchange authorization code for tokens**, click **Exchange authorization code for tokens**.
+12. Copy the value from the `Access token` field into the `bootstrap:access` prompt. Do not copy `Refresh token`, `ID token`, the authorization code, or the scope URL.
+
+The `Access token` field appears only after Step 2 succeeds. It is usually long and opaque, and the `expires_in` field shows how many seconds remain before it expires. If it expires before the bootstrap command runs, repeat the OAuth Playground flow and use a fresh access token.
+
+Run the bootstrap dry-run with your own IDs:
+
+```bash
+export SA_EMAIL="SERVICE_ACCOUNT_NAME@PROJECT_ID.iam.gserviceaccount.com"
+export GOOGLE_APPLICATION_CREDENTIALS="$PWD/secrets/ga4-gtm-mcp.json"
+
+npm run bootstrap:access -- \
+  --service-account-email "$SA_EMAIL" \
+  --ga4-property properties/GA4_PROPERTY_ID \
+  --gtm-account GTM_ACCOUNT_ID \
+  --gtm-container GTM_CONTAINER_ID
+```
+
+Paste the `Access token` when prompted. Re-run the same command with `--apply` only after the dry-run output is correct.
 
 Scope and API proof:
 

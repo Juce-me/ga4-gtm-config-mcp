@@ -13,7 +13,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "mcp": "node dist/server.js",
-    "dev": "tsc -p tsconfig.json && node dist/server.js"
+    "dev": "tsc -p tsconfig.json && node dist/server.js",
+    "bootstrap:access": "npm run build && node dist/cli/bootstrapAccess.js"
   },
   "engines": {
     "node": ">=20"

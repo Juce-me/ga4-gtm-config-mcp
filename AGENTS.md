@@ -231,6 +231,7 @@ This is an execution layer, not an analytics planner. It must not invent events,
 - Add a new line only when the user corrects the agent and the correction is likely to recur.
 - Tighten an existing line instead of adding a near-duplicate.
 - Delete stale learnings when the underlying issue goes away.
+- Before documenting auth setup, verify both Google Cloud identity mechanics and product-level GA4/GTM access-grant mechanics; do not assume service accounts can be added through product UI user flows.
 
 When the user corrects your approach, append a one-line rule here before ending the session. Write it concretely ("Always use X for Y"), never abstractly ("be careful with Y"). If an existing line already covers the correction, tighten it instead of adding a new one. Remove lines when the underlying issue goes away (model upgrades, refactors, process changes).
 

@@ -2,12 +2,13 @@ import type { analyticsadmin_v1beta } from "googleapis";
 import { stableStringify } from "../utils/stableJson.js";
 import { MCPError } from "../utils/errors.js";
 import type { UpsertResult } from "../gtm/upsertResult.js";
+import { propertyName } from "./resourceNames.js";
 
 export async function listCustomMetrics(
   client: analyticsadmin_v1beta.Analyticsadmin,
   propertyId: string,
 ) {
-  const res = await client.properties.customMetrics.list({ parent: propertyId, pageSize: 200 });
+  const res = await client.properties.customMetrics.list({ parent: propertyName(propertyId), pageSize: 200 });
   return res.data.customMetrics ?? [];
 }
 
@@ -18,7 +19,7 @@ export async function createCustomMetric(
   propertyId: string,
   payload: { parameterName: string; displayName: string; scope: "EVENT"; unit: string; description?: string },
 ) {
-  const res = await client.properties.customMetrics.create({ parent: propertyId, requestBody: payload });
+  const res = await client.properties.customMetrics.create({ parent: propertyName(propertyId), requestBody: payload });
   return res.data;
 }
 

@@ -2,6 +2,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { readSpec } from "../spec/readSpec.js";
+import { validateSpec } from "../spec/validateSpec.js";
 import { buildGtm } from "../gtm/tagManagerClient.js";
 import { publishVersion } from "../gtm/publish.js";
 import { gatePublish } from "../safety/publishGuards.js";
@@ -30,6 +31,7 @@ export function registerPublishTools(server: McpServer, registered: ToolMeta[]) 
     async ({ spec_path, account_id, container_id, version_id, approval_token, validation_report_path, environment, operator_requested_publish }) => {
       try {
         const spec = await readSpec(spec_path);
+        const validation = validateSpec(spec);
         const gate = await gatePublish({
           spec,
           approval_token,
@@ -38,10 +40,14 @@ export function registerPublishTools(server: McpServer, registered: ToolMeta[]) 
           version_id,
           publish_scope_present: process.env.INCLUDE_PUBLISH_SCOPE === "1",
           operator_requested_publish,
+          unresolved_validation_errors: validation.errors.length,
         });
         if (!gate.ok) {
           await audit("publish_blocked", { container_id, reasons: gate.reasons });
-          throw new MCPError("PUBLISH_BLOCKED", "Publish gate blocked", { reasons: gate.reasons });
+          throw new MCPError("PUBLISH_BLOCKED", "Publish gate blocked", {
+            reasons: gate.reasons,
+            validation_errors: validation.errors,
+          });
         }
         const gtm = await buildGtm("publish");
         const result = await publishVersion(gtm, account_id, container_id, version_id);

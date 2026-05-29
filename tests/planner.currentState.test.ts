@@ -18,8 +18,20 @@ describe("toCurrentState", () => {
             { type: "integer", key: "dataLayerVersion", value: "2" },
           ],
         }],
-        triggers: [{ name: "CE - userevent - pageview", type: "customEvent", customEventFilter: [{ type: "EQUALS", parameter: [{ key: "arg0", value: "{{DLV - event_type}}" }, { key: "arg1", value: "pageview" }] }] }],
-        tags: [{ name: "GA4 - Page View", type: "ga4_event", parameter: [{ key: "eventName", value: "page_view" }, { key: "measurementId", value: "G-XXXXXXX000" }] }],
+        triggers: [{ name: "CE - userevent - pageview", type: "customEvent", customEventFilter: [
+          { type: "EQUALS", parameter: [{ key: "arg0", value: "{{_event}}" }, { key: "arg1", value: "userevent" }] },
+          { type: "EQUALS", parameter: [{ key: "arg0", value: "{{DLV - event_type}}" }, { key: "arg1", value: "pageview" }] },
+        ] }],
+        tags: [{ name: "GA4 - Page View", type: "gaawe", parameter: [
+          { key: "eventName", value: "page_view" },
+          { key: "measurementId", value: "G-XXXXXXX000" },
+          { key: "eventParameters", type: "list", list: [
+            { type: "map", map: [
+              { key: "name", value: "page_name" },
+              { key: "value", value: "{{DLV - userParams.page_name}}" },
+            ] },
+          ] },
+        ] }],
       },
     };
     const c = toCurrentState(raw);
@@ -27,6 +39,18 @@ describe("toCurrentState", () => {
     expect(c.ga4.customMetrics[0]!.config.unit).toBe("SECONDS");
     expect(c.gtm.builtInVariables.map((b) => b.name).sort()).toEqual(["Page URL", "Referrer"]);
     expect(c.gtm.variables[0]!.config.dlvName).toBe("event_type");
+    expect(c.gtm.triggers[0]!.config).toEqual({
+      triggerType: "custom_event",
+      eventName: "userevent",
+      filters: [{ variable: "DLV - event_type", operator: "equals", value: "pageview" }],
+    });
+    expect(c.gtm.tags[0]!.config).toEqual({
+      tagType: "ga4_event",
+      measurementId: "G-XXXXXXX000",
+      eventName: "page_view",
+      trigger: "",
+      params: { page_name: "{{DLV - userParams.page_name}}" },
+    });
   });
 
   it("never returns a secretValue field anywhere", () => {

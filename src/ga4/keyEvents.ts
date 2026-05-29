@@ -2,12 +2,13 @@ import type { analyticsadmin_v1beta } from "googleapis";
 import { stableStringify } from "../utils/stableJson.js";
 import { MCPError } from "../utils/errors.js";
 import type { UpsertResult } from "../gtm/upsertResult.js";
+import { propertyName } from "./resourceNames.js";
 
 export async function listKeyEvents(
   client: analyticsadmin_v1beta.Analyticsadmin,
   propertyId: string,
 ) {
-  const res = await client.properties.keyEvents.list({ parent: propertyId, pageSize: 200 });
+  const res = await client.properties.keyEvents.list({ parent: propertyName(propertyId), pageSize: 200 });
   return res.data.keyEvents ?? [];
 }
 
@@ -18,7 +19,7 @@ export async function createKeyEvent(
   propertyId: string,
   payload: { eventName: string },
 ) {
-  const res = await client.properties.keyEvents.create({ parent: propertyId, requestBody: payload });
+  const res = await client.properties.keyEvents.create({ parent: propertyName(propertyId), requestBody: payload });
   return res.data;
 }
 

@@ -17,6 +17,7 @@ import { listVariables, upsertVariable } from "../gtm/variables.js";
 import { listTriggers, upsertTrigger } from "../gtm/triggers.js";
 import { listTags, upsertTag } from "../gtm/tags.js";
 import { findByName, createWorkspace, workspaceCapacity } from "../gtm/workspaces.js";
+import { workspacePath } from "../gtm/idPaths.js";
 import { assertWorkspaceSafe } from "../safety/workspaceGuards.js";
 import { gateConsentChange } from "../safety/consentGuards.js";
 import { findDestructiveChanges } from "../safety/destructiveChangeGuards.js";
@@ -100,11 +101,9 @@ export function registerApplyTools(server: McpServer, registered: ToolMeta[]) {
         const consent = gateConsentChange(spec);
         if (!consent.ok) throw new MCPError(consent.code!, "Consent change requires explicit approval", { reasons: consent.reasons });
 
-        const gtm = await buildGtm("write");
         // Workspace safety: refuse the live workspace.
-        if (workspace_id === "0") {
-          throw new MCPError("WORKSPACE_UNSAFE", "Refusing to apply changes to the live/default workspace (id=0)");
-        }
+        assertWorkspaceSafe({ workspaceId: workspace_id, name: "" });
+        const gtm = await buildGtm("write");
 
         const [builtInVariables, variables, triggers, tags] = await Promise.all([
           listBuiltInVariables(gtm, account_id, container_id, workspace_id),
@@ -134,7 +133,7 @@ export function registerApplyTools(server: McpServer, registered: ToolMeta[]) {
           throw new MCPError("SPEC_INVALID", "Destructive changes detected; not allowed by spec", { findings: destructive });
         }
 
-        const gtmWorkspaceRef = `accounts/${account_id}/containers/${container_id}/workspaces/${workspace_id}`;
+        const gtmWorkspaceRef = workspacePath(account_id, container_id, workspace_id);
 
         const writers: Writers = {
           upsertCustomDimension: async () => ({ action: "unchanged", entity: {} }),

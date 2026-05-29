@@ -14,7 +14,7 @@ describe("toDesiredState", () => {
     expect(d.ga4.keyEvents.length).toBe(1);
 
     // GTM
-    expect(d.gtm.builtInVariables.length).toBe(4);
+    expect(d.gtm.builtInVariables.map((v) => v.name)).toEqual(["Page Path", "Page URL", "Referrer"]);
     expect(d.gtm.variables.length).toBeGreaterThanOrEqual(4);
     expect(d.gtm.triggers.length).toBe(2);
     expect(d.gtm.tags.length).toBe(2);

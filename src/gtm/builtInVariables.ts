@@ -1,5 +1,6 @@
 import type { tagmanager_v2 } from "googleapis";
 import { MCPError } from "../utils/errors.js";
+import { accountId, containerId, workspaceId, workspacePath, workspacePathFromName } from "./idPaths.js";
 
 export async function listBuiltInVariables(
   gtm: tagmanager_v2.Tagmanager,
@@ -8,7 +9,7 @@ export async function listBuiltInVariables(
   workspaceId: string,
 ) {
   const res = await gtm.accounts.containers.workspaces.built_in_variables.list({
-    parent: `accounts/${accountId}/containers/${containerId}/workspaces/${workspaceId}`,
+    parent: workspacePath(accountId, containerId, workspaceId),
   });
   return res.data.builtInVariable ?? [];
 }
@@ -24,21 +25,21 @@ export async function enableBuiltIn(
   workspaceRef: string,
   name: string,
 ): Promise<{ action: "create" | "unchanged"; entity: { type: string } }> {
-  const parts = workspaceRef.split("/");
-  const accountId = parts[1];
-  const containerId = parts[3];
-  const workspaceId = parts[5];
-  if (!accountId || !containerId || !workspaceId) {
+  const normalizedWorkspaceRef = workspacePathFromName(workspaceRef);
+  const account = accountId(normalizedWorkspaceRef);
+  const container = containerId(normalizedWorkspaceRef);
+  const workspace = workspaceId(normalizedWorkspaceRef);
+  if (!account || !container || !workspace) {
     throw new MCPError("API_UNSUPPORTED", `Invalid workspaceRef: ${workspaceRef}`);
   }
-  const existing = await listBuiltInVariables(gtm, accountId, containerId, workspaceId);
+  const existing = await listBuiltInVariables(gtm, account, container, workspace);
   // Built-in variable type names come back in the `type` field.
   if (existing.some((e) => e.type === name)) {
     return { action: "unchanged", entity: { type: name } };
   }
   try {
     const res = await gtm.accounts.containers.workspaces.built_in_variables.create({
-      parent: workspaceRef,
+      parent: normalizedWorkspaceRef,
       type: [name],
     });
     return { action: "create", entity: { type: res.data.builtInVariable?.[0]?.type ?? name } };

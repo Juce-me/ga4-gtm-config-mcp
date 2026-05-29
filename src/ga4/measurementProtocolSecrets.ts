@@ -1,4 +1,5 @@
 import type { analyticsadmin_v1beta } from "googleapis";
+import { dataStreamName } from "./resourceNames.js";
 
 /**
  * Returns MP secret metadata only. Drops `secretValue` from every entry as
@@ -11,7 +12,7 @@ export async function listMetadata(
   streamId: string,
 ) {
   const res = await client.properties.dataStreams.measurementProtocolSecrets.list({
-    parent: `${propertyId}/dataStreams/${streamId}`,
+    parent: dataStreamName(propertyId, streamId),
     pageSize: 200,
   });
   const items = res.data.measurementProtocolSecrets ?? [];

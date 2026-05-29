@@ -1,5 +1,6 @@
 import type { tagmanager_v2 } from "googleapis";
 import { checkCapacity, GTM_MAX_WORKSPACES } from "../safety/workspaceGuards.js";
+import { containerPath } from "./idPaths.js";
 
 export async function listWorkspaces(
   gtm: tagmanager_v2.Tagmanager,
@@ -7,7 +8,7 @@ export async function listWorkspaces(
   containerId: string,
 ) {
   const res = await gtm.accounts.containers.workspaces.list({
-    parent: `accounts/${accountId}/containers/${containerId}`,
+    parent: containerPath(accountId, containerId),
   });
   return res.data.workspace ?? [];
 }
@@ -44,7 +45,7 @@ export async function createWorkspace(
   name: string,
 ) {
   const res = await gtm.accounts.containers.workspaces.create({
-    parent: `accounts/${accountId}/containers/${containerId}`,
+    parent: containerPath(accountId, containerId),
     requestBody: { name, description: "Created by ga4-gtm-config-mcp" },
   });
   return res.data;

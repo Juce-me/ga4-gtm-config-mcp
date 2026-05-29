@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { upsertCustomDimension } from "../src/ga4/customDimensions.js";
-import { upsertCustomMetric } from "../src/ga4/customMetrics.js";
-import { upsertKeyEvent } from "../src/ga4/keyEvents.js";
+import { listCustomDimensions, upsertCustomDimension } from "../src/ga4/customDimensions.js";
+import { listCustomMetrics, upsertCustomMetric } from "../src/ga4/customMetrics.js";
+import { listKeyEvents, upsertKeyEvent } from "../src/ga4/keyEvents.js";
 
 type Spy = { calls: string[] };
 function fake(spy: Spy, resource: "customDimensions" | "customMetrics" | "keyEvents") {
@@ -16,6 +16,40 @@ function fake(spy: Spy, resource: "customDimensions" | "customMetrics" | "keyEve
 }
 
 describe("ga4 upsert helpers", () => {
+  it("normalizes bare property IDs for GA4 Admin list parents", async () => {
+    const parents: string[] = [];
+    const fakeClient = {
+      properties: {
+        customDimensions: { list: async (args: { parent: string }) => { parents.push(args.parent); return { data: { customDimensions: [] } }; } },
+        customMetrics: { list: async (args: { parent: string }) => { parents.push(args.parent); return { data: { customMetrics: [] } }; } },
+        keyEvents: { list: async (args: { parent: string }) => { parents.push(args.parent); return { data: { keyEvents: [] } }; } },
+      },
+    };
+
+    await listCustomDimensions(fakeClient as unknown as Parameters<typeof listCustomDimensions>[0], "1");
+    await listCustomMetrics(fakeClient as unknown as Parameters<typeof listCustomMetrics>[0], "1");
+    await listKeyEvents(fakeClient as unknown as Parameters<typeof listKeyEvents>[0], "1");
+
+    expect(parents).toEqual(["properties/1", "properties/1", "properties/1"]);
+  });
+
+  it("normalizes bare property IDs for GA4 Admin create parents", async () => {
+    const parents: string[] = [];
+    const fakeClient = {
+      properties: {
+        customDimensions: { create: async (args: { parent: string; requestBody: object }) => { parents.push(args.parent); return { data: args.requestBody }; } },
+        customMetrics: { create: async (args: { parent: string; requestBody: object }) => { parents.push(args.parent); return { data: args.requestBody }; } },
+        keyEvents: { create: async (args: { parent: string; requestBody: object }) => { parents.push(args.parent); return { data: args.requestBody }; } },
+      },
+    };
+
+    await upsertCustomDimension(fakeClient as unknown as Parameters<typeof upsertCustomDimension>[0], "1", { parameterName: "p", displayName: "P", scope: "EVENT" });
+    await upsertCustomMetric(fakeClient as unknown as Parameters<typeof upsertCustomMetric>[0], "1", { parameterName: "t", displayName: "T", scope: "EVENT", unit: "SECONDS" });
+    await upsertKeyEvent(fakeClient as unknown as Parameters<typeof upsertKeyEvent>[0], "1", { eventName: "result_view" });
+
+    expect(parents).toEqual(["properties/1", "properties/1", "properties/1"]);
+  });
+
   it("CD: create when no existing", async () => {
     const spy: Spy = { calls: [] };
     const r = await upsertCustomDimension(fake(spy, "customDimensions"), "properties/1", { parameterName: "p", displayName: "P", scope: "EVENT" });

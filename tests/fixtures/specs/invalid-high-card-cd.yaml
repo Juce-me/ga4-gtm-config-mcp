@@ -73,7 +73,6 @@ gtm_web:
   built_in_variables:
     - "Page URL"
     - "Page Path"
-    - "Page Title"
     - "Referrer"
 
   data_layer_variables:

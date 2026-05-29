@@ -1,6 +1,7 @@
 import { access } from "node:fs/promises";
 import type { McpExecutionSpec } from "../spec/mcpExecutionSpec.schema.js";
 import type { ErrorCode } from "../utils/errors.js";
+import { workspaceId as normalizeWorkspaceId } from "../gtm/idPaths.js";
 
 export interface VersionGateInput {
   spec: McpExecutionSpec;
@@ -26,7 +27,7 @@ export async function gateVersionCreation(input: VersionGateInput): Promise<Gate
   if (!input.approval_token) {
     reasons.push("approval_token is missing or empty");
   }
-  if (input.workspace_id === "0") {
+  if (normalizeWorkspaceId(input.workspace_id) === "0") {
     reasons.push("workspace_id refers to the live/default workspace");
   }
   if (input.unresolved_blocked_items > 0) {

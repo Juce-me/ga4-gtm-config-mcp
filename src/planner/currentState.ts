@@ -25,19 +25,15 @@ const OPERATOR_MAP: Record<string, string> = {
   MATCHES_REGEX: "matches_regex",
 };
 
-// ─── Trigger-type mapping: GTM API camelCase → spec snake_case ────────────────
-// Kept for documentation; we store the raw GTM value in normalized form so
-// currentState and desiredState use the SAME values for comparison.
-// (desiredState stores spec snake_case; this normalizer stores GTM camelCase.)
-// The diff layer compares the two currentState outputs directly — it does NOT
-// need them to share the same triggerType string. If a round-trip equality is
-// ever needed, apply this map before returning.
-//
-// NOTE: We intentionally keep raw GTM values here (camelCase) so that
-// currentState → diff produces sensible "update" signals when the spec
-// snake_case differs. That means triggers always show as "update" vs. desired
-// when the strings differ. Refinement can normalize further once real data
-// confirms the exact round-trip requirement.
+const API_TRIGGER_TYPE_MAP: Record<string, string> = {
+  customEvent: "custom_event",
+  pageview: "page_view",
+  historyChange: "history_change",
+};
+
+const API_TAG_TYPE_MAP: Record<string, string> = {
+  gaawe: "ga4_event",
+};
 
 // ─── Main normalizer ──────────────────────────────────────────────────────────
 
@@ -150,22 +146,27 @@ function normalizeGtmTrigger(t: AnyObj): NormalizedGtm["triggers"][number] {
       ? t["filter"]
       : []) as AnyObj[];
 
-  const filters = rawFilters.map((f) => {
+  let eventName: string | undefined;
+  const filters = rawFilters.flatMap((f) => {
     const op = OPERATOR_MAP[str(f["type"])] ?? str(f["type"]).toLowerCase();
     const params = f["parameter"] as AnyObj[] | undefined;
     // arg0 typically contains "{{VariableName}}" — strip the mustache delimiters
     const arg0Raw = getParam(params, "arg0");
     const variable = arg0Raw.replace(/^\{\{/, "").replace(/\}\}$/, "");
     const value = getParam(params, "arg1");
-    return { variable, operator: op, value };
+    if (variable === "_event" && op === "equals") {
+      eventName = value;
+      return [];
+    }
+    return [{ variable, operator: op, value }];
   });
 
   return {
     kind: "gtm_trigger" as const,
     name: str(t["name"]),
     config: {
-      triggerType: str(t["type"]),
-      ...(t["name"] !== undefined ? {} : {}), // no-op placeholder; eventName is not stored on GTM trigger objects
+      triggerType: API_TRIGGER_TYPE_MAP[str(t["type"])] ?? str(t["type"]),
+      ...(eventName !== undefined ? { eventName } : {}),
       filters,
     },
   };
@@ -191,6 +192,10 @@ function normalizeGtmTag(tg: AnyObj): NormalizedGtm["tags"][number] {
       const k = str(p["key"]);
       const v = str(p["value"]);
       if (k === "eventName" || k === "measurementId") continue;
+      if (k === "eventParameters") {
+        Object.assign(extraParams, getEventParameters(p));
+        continue;
+      }
       // Defense in depth: never surface secret values
       if (k === "secretValue" || /secret/i.test(k)) continue;
       extraParams[k] = v;
@@ -201,13 +206,28 @@ function normalizeGtmTag(tg: AnyObj): NormalizedGtm["tags"][number] {
     kind: "gtm_tag" as const,
     name: str(tg["name"]),
     config: {
-      tagType: str(tg["type"]),
+      tagType: API_TAG_TYPE_MAP[str(tg["type"])] ?? str(tg["type"]),
       ...(measurementId ? { measurementId } : {}),
       eventName,
       trigger: "", // trigger ID → name resolution deferred to apply orchestrator (M6)
       params: extraParams,
     },
   };
+}
+
+function getEventParameters(parameter: AnyObj): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!Array.isArray(parameter["list"])) return out;
+  for (const entry of parameter["list"] as AnyObj[]) {
+    if (!Array.isArray(entry["map"])) continue;
+    const map = entry["map"] as AnyObj[];
+    const name = getParam(map, "name");
+    const value = getParam(map, "value");
+    if (name && name !== "secretValue" && !/secret/i.test(name)) {
+      out[name] = value;
+    }
+  }
+  return out;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

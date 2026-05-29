@@ -35,7 +35,7 @@ Requires Node.js >= 20 LTS.
 ```bash
 npm install      # installs pinned deps from the committed lockfile
 npm run build    # compiles src/ -> dist/
-npm test         # vitest run (123 tests)
+npm test         # vitest run
 npm run typecheck
 ```
 
@@ -57,6 +57,7 @@ Scopes are requested least-privilege per operation (`src/auth/scopes.ts`):
 |------|--------|
 | `read` | `tagmanager.readonly`, `analytics.readonly` |
 | `write` | read scopes + `tagmanager.edit.containers`, `analytics.edit` |
+| `version` | read scopes + `tagmanager.edit.containerversions` |
 | `publish` | write scopes + `tagmanager.publish` |
 
 ### `INCLUDE_PUBLISH_SCOPE` opt-in
@@ -92,6 +93,12 @@ For Claude Desktop (`claude_desktop_config.json`) or Claude Code (`.mcp.json`):
 ```
 
 Add `"INCLUDE_PUBLISH_SCOPE": "1"` to the `env` block only if and when you have explicitly decided to allow publishing.
+
+## 6.1 ID formats
+
+GTM tool arguments accept either bare IDs (`123`, `456`, `7`, `9`) or full resource names (`accounts/123`, `accounts/123/containers/456`, `accounts/123/containers/456/workspaces/7`, `accounts/123/containers/456/versions/9`). The server normalizes these before calling the Google APIs so planner-generated specs can use resource names while operators can still pass bare IDs.
+
+GA4 property IDs accept either bare IDs or `properties/<property-id>`. `web_stream_id` accepts either a bare stream ID or `properties/<property-id>/dataStreams/<stream-id>` when listing Measurement Protocol secret metadata.
 
 ## 7. Tools
 
@@ -137,6 +144,8 @@ Each guard is a pure, unit-tested function; the apply/gated tools layer them def
 - **Workspace guard** — unconditionally rejects the live/default workspace (`workspaceId: "0"` or name `"Default Workspace"`); enforces the GTM 3-workspace-per-container cap; detects name collisions.
 - **Destructive-change guard** — deletes are blocked unless `destructive_changes_allowed: true`; archives are `API_UNSUPPORTED` regardless.
 - **Version guard / publish guard** — multi-condition, default-deny gates that surface **every** failing reason at once (spec flag, approval token, diff/validation report, environment match, publish-scope presence).
+- **Write payload guardrails** — non-dry-run apply converts normalized desired state into GA Admin / GTM API request bodies at the write boundary, including GTM trigger-ID resolution for tags. Tags with unresolved trigger names are blocked before any tag write.
+- **Dangerous-tool revalidation** — container-version creation and publish re-run semantic validation against the current spec before any Google API call.
 - **Dry-run default** — every write tool defaults to `dry_run: true`, making zero API write calls until explicitly disabled.
 - **Audit log** — one JSON line per safety event to `.audit/audit-YYYY-MM-DD.log` (gitignored), every payload passed through the redactor.
 

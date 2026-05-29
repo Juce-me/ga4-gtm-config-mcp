@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { buildAuth } from "../src/auth/googleAuth.js";
-import { READ_SCOPES, WRITE_WORKSPACE_SCOPES, PUBLISH_SCOPES } from "../src/auth/scopes.js";
+import { READ_SCOPES, WRITE_WORKSPACE_SCOPES, VERSION_SCOPES, PUBLISH_SCOPES } from "../src/auth/scopes.js";
 
 describe("auth scopes", () => {
   it("READ_SCOPES contains tag manager + analytics read", () => {
@@ -12,6 +12,14 @@ describe("auth scopes", () => {
     for (const s of READ_SCOPES) expect(WRITE_WORKSPACE_SCOPES).toContain(s);
     expect(WRITE_WORKSPACE_SCOPES).toContain("https://www.googleapis.com/auth/tagmanager.edit.containers");
     expect(WRITE_WORKSPACE_SCOPES).toContain("https://www.googleapis.com/auth/analytics.edit");
+    expect(WRITE_WORKSPACE_SCOPES).not.toContain("https://www.googleapis.com/auth/tagmanager.edit.containerversions");
+  });
+
+  it("VERSION_SCOPES is a superset of READ_SCOPES + adds container-version edit only", () => {
+    for (const s of READ_SCOPES) expect(VERSION_SCOPES).toContain(s);
+    expect(VERSION_SCOPES).toContain("https://www.googleapis.com/auth/tagmanager.edit.containerversions");
+    expect(VERSION_SCOPES).not.toContain("https://www.googleapis.com/auth/tagmanager.edit.containers");
+    expect(VERSION_SCOPES).not.toContain("https://www.googleapis.com/auth/tagmanager.publish");
   });
 
   it("PUBLISH_SCOPES is a superset of WRITE_WORKSPACE_SCOPES + adds publish scope", () => {
@@ -31,6 +39,12 @@ describe("buildAuth", () => {
 
   it("returns an auth object for write mode", async () => {
     const auth = await buildAuth({ mode: "write" });
+    expect(auth).toBeDefined();
+  });
+
+  it("returns an auth object for version mode without publish opt-in", async () => {
+    vi.stubEnv("INCLUDE_PUBLISH_SCOPE", "");
+    const auth = await buildAuth({ mode: "version" });
     expect(auth).toBeDefined();
   });
 

@@ -1,5 +1,6 @@
 import type { tagmanager_v2 } from "googleapis";
 import { MCPError } from "../utils/errors.js";
+import { containerVersionPath } from "./idPaths.js";
 
 /**
  * Publishes a GTM container version. Refuses if INCLUDE_PUBLISH_SCOPE !== "1".
@@ -20,7 +21,7 @@ export async function publishVersion(
     );
   }
   const res = await gtm.accounts.containers.versions.publish({
-    path: `accounts/${accountId}/containers/${containerId}/versions/${versionId}`,
+    path: containerVersionPath(accountId, containerId, versionId),
   });
   return res.data;
 }

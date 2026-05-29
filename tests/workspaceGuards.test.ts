@@ -6,6 +6,10 @@ describe("workspaceGuards", () => {
     expect(() => assertWorkspaceSafe({ workspaceId: "0", name: "Default Workspace" })).toThrow(/WORKSPACE_UNSAFE/);
   });
 
+  it("rejects the live workspace when passed as a full resource name", () => {
+    expect(() => assertWorkspaceSafe({ workspaceId: "accounts/1/containers/2/workspaces/0", name: "" })).toThrow(/WORKSPACE_UNSAFE/);
+  });
+
   it("rejects a non-zero workspace id whose name says 'Default Workspace'", () => {
     expect(() => assertWorkspaceSafe({ workspaceId: "12345", name: "Default Workspace" })).toThrow(/WORKSPACE_UNSAFE/);
   });

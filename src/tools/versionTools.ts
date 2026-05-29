@@ -2,6 +2,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { readSpec } from "../spec/readSpec.js";
+import { validateSpec } from "../spec/validateSpec.js";
 import { buildGtm } from "../gtm/tagManagerClient.js";
 import { createVersion } from "../gtm/versions.js";
 import { manualValidationChecklist } from "../gtm/preview.js";
@@ -31,19 +32,23 @@ export function registerVersionTools(server: McpServer, registered: ToolMeta[]) 
     async ({ spec_path, account_id, container_id, workspace_id, approval_token, diff_report_path, version_name, notes }) => {
       try {
         const spec = await readSpec(spec_path);
+        const validation = validateSpec(spec);
         const gate = await gateVersionCreation({
           spec,
           approval_token,
           diff_report_path,
           workspace_id,
           unresolved_blocked_items: 0,
-          unresolved_validation_errors: 0,
+          unresolved_validation_errors: validation.errors.length,
         });
         if (!gate.ok) {
           await audit("version_blocked", { container_id, reasons: gate.reasons });
-          throw new MCPError("VERSION_CREATION_BLOCKED", "Version creation gate blocked", { reasons: gate.reasons });
+          throw new MCPError("VERSION_CREATION_BLOCKED", "Version creation gate blocked", {
+            reasons: gate.reasons,
+            validation_errors: validation.errors,
+          });
         }
-        const gtm = await buildGtm("write");
+        const gtm = await buildGtm("version");
         const created = await createVersion(gtm, account_id, container_id, workspace_id, version_name, notes);
         await audit("version_created", { container_id, workspace_id });
         return { content: [{ type: "text", text: JSON.stringify({

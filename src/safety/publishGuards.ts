@@ -10,6 +10,7 @@ export interface PublishGateInput {
   version_id: string;
   publish_scope_present: boolean;
   operator_requested_publish: boolean;
+  unresolved_validation_errors?: number;
 }
 
 export async function gatePublish(input: PublishGateInput): Promise<GateResult> {
@@ -34,6 +35,9 @@ export async function gatePublish(input: PublishGateInput): Promise<GateResult> 
   }
   if (!input.operator_requested_publish) {
     reasons.push("operator_requested_publish is false");
+  }
+  if ((input.unresolved_validation_errors ?? 0) > 0) {
+    reasons.push(`${input.unresolved_validation_errors} unresolved validation errors`);
   }
 
   // Validate report file exists and content equals "passed"

@@ -7,6 +7,7 @@ export interface PiiFinding {
 }
 
 const FORBIDDEN_PARAM_KEYS = new Set(["email", "name", "phone", "ip", "user_agent", "referrer"]);
+const SUPPORTED_GTM_BUILT_INS = new Set(["Page URL", "Page Path", "Page Hostname", "Referrer", "Event"]);
 const URL_WITH_QUERY_RE = /^https?:\/\/[^\s?]+\?[^\s]+$/;
 
 export function findPiiViolations(input: {
@@ -34,7 +35,17 @@ export function findPiiViolations(input: {
     }
   }
 
-  // built_in_variables entries (e.g. "Referrer", "Page URL") are not violations on their own.
+  if (input.built_in_variables) {
+    input.built_in_variables.forEach((name, i) => {
+      if (!SUPPORTED_GTM_BUILT_INS.has(name)) {
+        findings.push({
+          code: "SPEC_INVALID",
+          message: `GTM built-in variable "${name}" is not supported by the planner-facing contract`,
+          path: `built_in_variables[${i}]`,
+        });
+      }
+    });
+  }
 
   return findings;
 }

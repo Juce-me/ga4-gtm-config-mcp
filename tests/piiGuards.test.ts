@@ -14,6 +14,15 @@ describe("piiGuards.findPiiViolations", () => {
     expect(findPiiViolations({ built_in_variables: ["Referrer"] }).length).toBe(0);
   });
 
+  it("allows only planner-supported GTM built-in variables", () => {
+    expect(findPiiViolations({
+      built_in_variables: ["Page URL", "Page Path", "Page Hostname", "Referrer", "Event"],
+    })).toEqual([]);
+    expect(findPiiViolations({ built_in_variables: ["Page Title"] })).toMatchObject([
+      { code: "SPEC_INVALID", path: "built_in_variables[0]" },
+    ]);
+  });
+
   it("flags raw 'referrer' as an event param even though the built-in is allowed", () => {
     expect(findPiiViolations({ params: { referrer: "{{Referrer}}" } }).length).toBe(1);
   });

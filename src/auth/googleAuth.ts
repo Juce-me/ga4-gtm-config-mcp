@@ -1,8 +1,8 @@
 import { google } from "googleapis";
-import { READ_SCOPES, WRITE_WORKSPACE_SCOPES, PUBLISH_SCOPES } from "./scopes.js";
+import { READ_SCOPES, WRITE_WORKSPACE_SCOPES, VERSION_SCOPES, PUBLISH_SCOPES } from "./scopes.js";
 import { MCPError } from "../utils/errors.js";
 
-export type AuthMode = "read" | "write" | "publish";
+export type AuthMode = "read" | "write" | "version" | "publish";
 
 export async function buildAuth(opts: { mode: AuthMode }) {
   if (opts.mode === "publish" && process.env.INCLUDE_PUBLISH_SCOPE !== "1") {
@@ -14,6 +14,7 @@ export async function buildAuth(opts: { mode: AuthMode }) {
   const scopes =
     opts.mode === "read" ? READ_SCOPES
     : opts.mode === "write" ? WRITE_WORKSPACE_SCOPES
+    : opts.mode === "version" ? VERSION_SCOPES
     : PUBLISH_SCOPES;
 
   // GoogleAuth picks up GOOGLE_APPLICATION_CREDENTIALS automatically (service account).

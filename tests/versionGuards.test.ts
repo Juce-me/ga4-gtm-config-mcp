@@ -32,6 +32,11 @@ describe("versionGuards.gateVersionCreation", () => {
     expect(r.ok).toBe(false);
   });
 
+  it("blocks on the live workspace when workspace_id is a full resource name", async () => {
+    const r = await gateVersionCreation({ ...okInput, workspace_id: "accounts/1/containers/2/workspaces/0" });
+    expect(r.ok).toBe(false);
+  });
+
   it("collects multiple reasons in one result", async () => {
     const r = await gateVersionCreation({
       ...okInput,

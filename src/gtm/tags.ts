@@ -2,6 +2,7 @@ import type { tagmanager_v2 } from "googleapis";
 import { MCPError } from "../utils/errors.js";
 import type { UpsertResult } from "./upsertResult.js";
 import { gtmEntityMatches } from "./upsertResult.js";
+import { workspacePath, workspacePathFromName } from "./idPaths.js";
 
 export async function listTags(
   gtm: tagmanager_v2.Tagmanager,
@@ -10,7 +11,7 @@ export async function listTags(
   workspaceId: string,
 ) {
   const res = await gtm.accounts.containers.workspaces.tags.list({
-    parent: `accounts/${accountId}/containers/${containerId}/workspaces/${workspaceId}`,
+    parent: workspacePath(accountId, containerId, workspaceId),
   });
   return res.data.tag ?? [];
 }
@@ -20,8 +21,9 @@ export async function createTag(
   workspaceRef: string,
   payload: Record<string, unknown>,
 ) {
+  const normalizedWorkspaceRef = workspacePathFromName(workspaceRef);
   const res = await gtm.accounts.containers.workspaces.tags.create({
-    parent: workspaceRef,
+    parent: normalizedWorkspaceRef,
     requestBody: payload as unknown as tagmanager_v2.Schema$Tag,
   });
   return res.data;
@@ -54,7 +56,7 @@ export async function upsertTag(
   const pathStr = existing.path ?? (() => {
     const id = existing.tagId;
     if (!id) throw new MCPError("API_UNSUPPORTED", "existing tag has no tagId; cannot update");
-    return `${workspaceRef}/tags/${id}`;
+    return `${workspacePathFromName(workspaceRef)}/tags/${id}`;
   })();
   return { action: "update", entity: await updateTag(gtm, pathStr, payload) };
 }

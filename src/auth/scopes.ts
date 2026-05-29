@@ -9,6 +9,11 @@ export const WRITE_WORKSPACE_SCOPES = [
   "https://www.googleapis.com/auth/analytics.edit",
 ] as const;
 
+export const VERSION_SCOPES = [
+  ...READ_SCOPES,
+  "https://www.googleapis.com/auth/tagmanager.edit.containerversions",
+] as const;
+
 export const PUBLISH_SCOPES = [
   ...WRITE_WORKSPACE_SCOPES,
   "https://www.googleapis.com/auth/tagmanager.publish",

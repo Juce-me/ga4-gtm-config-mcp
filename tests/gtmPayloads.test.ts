@@ -1,11 +1,18 @@
 import { describe, it, expect } from "vitest";
 import {
+  desiredBuiltInVariableToGtmType,
   desiredVariableToGtmPayload,
   desiredTriggerToGtmPayload,
   desiredTagToGtmPayload,
-} from "../src/planner/desiredState.js";
+} from "../src/planner/apiPayloads.js";
 
 describe("desired→GTM payload shapes", () => {
+  it("built-in variable: maps planner display names to GTM API type values", () => {
+    expect(desiredBuiltInVariableToGtmType("Page URL")).toBe("pageUrl");
+    expect(desiredBuiltInVariableToGtmType("Page Path")).toBe("pagePath");
+    expect(desiredBuiltInVariableToGtmType("Referrer")).toBe("referrer");
+  });
+
   it("variable: produces the v-type DLV body", () => {
     const payload = desiredVariableToGtmPayload({
       kind: "gtm_variable",
@@ -33,11 +40,26 @@ describe("desired→GTM payload shapes", () => {
       },
     });
     expect(payload.type).toBe("customEvent");
-    expect(payload.customEventFilter.length).toBe(1);
+    expect(payload.customEventFilter).toEqual([
+      {
+        type: "EQUALS",
+        parameter: [
+          { type: "template", key: "arg0", value: "{{_event}}" },
+          { type: "template", key: "arg1", value: "userevent" },
+        ],
+      },
+      {
+        type: "EQUALS",
+        parameter: [
+          { type: "template", key: "arg0", value: "{{DLV - event_type}}" },
+          { type: "template", key: "arg1", value: "pageview" },
+        ],
+      },
+    ]);
     expect(payload.customEventFilter[0]!.type).toBe("EQUALS");
   });
 
-  it("tag: GA4 - Page View body has eventName + measurementId + extra params", () => {
+  it("tag: GA4 - Page View body has eventName + measurementId + extra params and trigger ID", () => {
     const payload = desiredTagToGtmPayload({
       kind: "gtm_tag",
       name: "GA4 - Page View",
@@ -48,10 +70,24 @@ describe("desired→GTM payload shapes", () => {
         trigger: "CE - userevent - pageview",
         params: { page_name: "{{DLV - userParams.page_name}}" },
       },
-    });
+    }, new Map([["CE - userevent - pageview", "17"]]));
     expect(payload.name).toBe("GA4 - Page View");
-    expect(payload.type).toBe("ga4_event");
+    expect(payload.type).toBe("gaawe");
+    expect(payload.firingTriggerId).toEqual(["17"]);
     const keys = payload.parameter.map((p) => p.key);
-    expect(keys).toEqual(["eventName", "measurementId", "page_name"]);
+    expect(keys).toEqual(["eventName", "measurementId", "eventParameters"]);
+    expect(payload.parameter[2]).toEqual({
+      type: "list",
+      key: "eventParameters",
+      list: [
+        {
+          type: "map",
+          map: [
+            { type: "template", key: "name", value: "page_name" },
+            { type: "template", key: "value", value: "{{DLV - userParams.page_name}}" },
+          ],
+        },
+      ],
+    });
   });
 });

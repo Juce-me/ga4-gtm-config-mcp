@@ -19,12 +19,14 @@ describe("gtm.publish.publishVersion", () => {
   it("calls the API when INCLUDE_PUBLISH_SCOPE=1", async () => {
     vi.stubEnv("INCLUDE_PUBLISH_SCOPE", "1");
     let called = false;
+    let path = "";
     const fakeGtm = {
-      accounts: { containers: { versions: { publish: async () => { called = true; return { data: { containerVersion: { name: "v42" } } }; } } } },
+      accounts: { containers: { versions: { publish: async (args: { path: string }) => { called = true; path = args.path; return { data: { containerVersion: { name: "v42" } } }; } } } },
     } as unknown as Parameters<typeof publishVersion>[0];
 
-    const r = await publishVersion(fakeGtm, "1", "2", "99");
+    const r = await publishVersion(fakeGtm, "accounts/1", "accounts/1/containers/2", "accounts/1/containers/2/versions/99");
     expect(called).toBe(true);
+    expect(path).toBe("accounts/1/containers/2/versions/99");
     expect((r as { containerVersion: { name: string } }).containerVersion.name).toBe("v42");
   });
 });

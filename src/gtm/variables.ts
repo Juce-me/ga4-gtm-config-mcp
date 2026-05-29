@@ -2,6 +2,7 @@ import type { tagmanager_v2 } from "googleapis";
 import { MCPError } from "../utils/errors.js";
 import type { UpsertResult } from "./upsertResult.js";
 import { gtmEntityMatches } from "./upsertResult.js";
+import { workspacePath, workspacePathFromName } from "./idPaths.js";
 
 export async function listVariables(
   gtm: tagmanager_v2.Tagmanager,
@@ -10,7 +11,7 @@ export async function listVariables(
   workspaceId: string,
 ) {
   const res = await gtm.accounts.containers.workspaces.variables.list({
-    parent: `accounts/${accountId}/containers/${containerId}/workspaces/${workspaceId}`,
+    parent: workspacePath(accountId, containerId, workspaceId),
   });
   return res.data.variable ?? [];
 }
@@ -20,8 +21,9 @@ export async function createVariable(
   workspaceRef: string,
   payload: Record<string, unknown>,
 ) {
+  const normalizedWorkspaceRef = workspacePathFromName(workspaceRef);
   const res = await gtm.accounts.containers.workspaces.variables.create({
-    parent: workspaceRef,
+    parent: normalizedWorkspaceRef,
     requestBody: payload as unknown as tagmanager_v2.Schema$Variable,
   });
   return res.data;
@@ -54,7 +56,7 @@ export async function upsertVariable(
   const pathStr = existing.path ?? (() => {
     const id = existing.variableId;
     if (!id) throw new MCPError("API_UNSUPPORTED", "existing variable has no variableId; cannot update");
-    return `${workspaceRef}/variables/${id}`;
+    return `${workspacePathFromName(workspaceRef)}/variables/${id}`;
   })();
   return { action: "update", entity: await updateVariable(gtm, pathStr, payload) };
 }

@@ -1,12 +1,14 @@
 import { MCPError } from "../utils/errors.js";
+import { workspaceId as normalizeWorkspaceId } from "../gtm/idPaths.js";
 
 export const GTM_MAX_WORKSPACES = 3;
 
 export function assertWorkspaceSafe(ws: { workspaceId: string; name: string }): void {
-  if (ws.workspaceId === "0" || ws.name === "Default Workspace") {
+  const id = normalizeWorkspaceId(ws.workspaceId);
+  if (id === "0" || ws.name === "Default Workspace") {
     throw new MCPError(
       "WORKSPACE_UNSAFE",
-      `WORKSPACE_UNSAFE: Refusing to operate on the live/default workspace (id=${ws.workspaceId}, name=${ws.name})`,
+      `WORKSPACE_UNSAFE: Refusing to operate on the live/default workspace (id=${id}, name=${ws.name})`,
     );
   }
 }

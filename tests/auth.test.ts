@@ -1,6 +1,26 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { buildAuth } from "../src/auth/googleAuth.js";
-import { READ_SCOPES, WRITE_WORKSPACE_SCOPES, VERSION_SCOPES, PUBLISH_SCOPES } from "../src/auth/scopes.js";
+import {
+  GA4_ACCESS_BOOTSTRAP_SCOPES,
+  GTM_ACCESS_BOOTSTRAP_SCOPES,
+  READ_SCOPES,
+  WRITE_WORKSPACE_SCOPES,
+  VERSION_SCOPES,
+  PUBLISH_SCOPES,
+} from "../src/auth/scopes.js";
+
+const tmpDirs: string[] = [];
+
+function writeCredential(body: object): string {
+  const dir = mkdtempSync(join(tmpdir(), "ga4-gtm-auth-"));
+  tmpDirs.push(dir);
+  const path = join(dir, "credentials.json");
+  writeFileSync(path, JSON.stringify(body), "utf8");
+  return path;
+}
 
 describe("auth scopes", () => {
   it("READ_SCOPES contains tag manager + analytics read", () => {
@@ -26,15 +46,40 @@ describe("auth scopes", () => {
     for (const s of WRITE_WORKSPACE_SCOPES) expect(PUBLISH_SCOPES).toContain(s);
     expect(PUBLISH_SCOPES).toContain("https://www.googleapis.com/auth/tagmanager.publish");
   });
+
+  it("keeps user-management scopes out of normal runtime scope tiers", () => {
+    expect(GA4_ACCESS_BOOTSTRAP_SCOPES).toEqual(["https://www.googleapis.com/auth/analytics.manage.users"]);
+    expect(GTM_ACCESS_BOOTSTRAP_SCOPES).toEqual(["https://www.googleapis.com/auth/tagmanager.manage.users"]);
+
+    const runtimeScopes = [READ_SCOPES, WRITE_WORKSPACE_SCOPES, VERSION_SCOPES, PUBLISH_SCOPES];
+    for (const scopes of runtimeScopes) {
+      expect(scopes).not.toContain(GA4_ACCESS_BOOTSTRAP_SCOPES[0]);
+      expect(scopes).not.toContain(GTM_ACCESS_BOOTSTRAP_SCOPES[0]);
+    }
+  });
 });
 
 describe("buildAuth", () => {
-  beforeEach(() => { vi.unstubAllEnvs(); });
-  afterEach(() => { vi.unstubAllEnvs(); });
+  beforeEach(() => {
+    vi.unstubAllEnvs();
+    vi.stubEnv("ALLOW_GOOGLE_METADATA_AUTH", "1");
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    for (const dir of tmpDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  });
 
   it("returns an auth object for read mode", async () => {
     const auth = await buildAuth({ mode: "read" });
     expect(auth).toBeDefined();
+  });
+
+  it("uses an explicit metadata Compute client when metadata auth is allowed", async () => {
+    vi.stubEnv("ALLOW_GOOGLE_METADATA_AUTH", "1");
+    vi.stubEnv("GOOGLE_APPLICATION_CREDENTIALS", "");
+
+    const auth = await buildAuth({ mode: "read" });
+    expect(auth.constructor.name).toBe("Compute");
   });
 
   it("returns an auth object for write mode", async () => {
@@ -57,5 +102,17 @@ describe("buildAuth", () => {
     vi.stubEnv("INCLUDE_PUBLISH_SCOPE", "1");
     const auth = await buildAuth({ mode: "publish" });
     expect(auth).toBeDefined();
+  });
+
+  it("rejects user ADC credentials at runtime", async () => {
+    vi.stubEnv("ALLOW_GOOGLE_METADATA_AUTH", "");
+    vi.stubEnv("GOOGLE_APPLICATION_CREDENTIALS", writeCredential({
+      type: "authorized_user",
+      client_id: "fake",
+      client_secret: "fake",
+      refresh_token: "fake",
+    }));
+
+    await expect(buildAuth({ mode: "read" })).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
   });
 });

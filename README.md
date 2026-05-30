@@ -39,30 +39,23 @@ npm test         # vitest run
 npm run typecheck
 ```
 
-## 4. Auth setup
+## 4. Setup and authorization
 
-### Service account vs OAuth
+Start with [Setup overview](docs/setup/README.md). It defines every identity and credential involved, then links to the focused runbooks:
 
-Today the server constructs credentials via `google.auth.GoogleAuth`, which uses **Application Default Credentials** — i.e. a service-account JSON key referenced by `GOOGLE_APPLICATION_CREDENTIALS`. The service-account identity must have GA4 Admin (edit) and GTM (edit) access on the target property and container.
+- [Google Cloud credentials](docs/setup/google-cloud-credentials.md): where to create the Google Cloud project resources, which APIs to enable, what a service account is, and when to use Workload Identity Federation instead of a JSON key.
+- [Product access bootstrap](docs/setup/product-access-bootstrap.md): how a human GA4/GTM admin creates a one-time OAuth access token and grants GA4/GTM access to the service account through official APIs.
+- [MCP client configuration](docs/setup/mcp-client-configuration.md): how Claude Desktop, Claude Code, Codex, or another MCP host launches this server and passes `GOOGLE_APPLICATION_CREDENTIALS`.
+- [Application project integration](docs/setup/application-project-integration.md): what other application repos should provide, and what they must not store.
 
-The OAuth refresh-token flow is **not yet wired** (`src/auth/googleAuth.ts` notes this explicitly). Use the service-account path until it lands.
+The short version:
 
-Copy [`.env.example`](.env.example) to `.env` and fill it in. Never commit real values.
-
-### Required scopes per mode
-
-Scopes are requested least-privilege per operation (`src/auth/scopes.ts`):
-
-| Mode | Scopes |
-|------|--------|
-| `read` | `tagmanager.readonly`, `analytics.readonly` |
-| `write` | read scopes + `tagmanager.edit.containers`, `analytics.edit` |
-| `version` | read scopes + `tagmanager.edit.containerversions` |
-| `publish` | write scopes + `tagmanager.publish` |
-
-### `INCLUDE_PUBLISH_SCOPE` opt-in
-
-The `publish` scope **cannot even be requested** unless `INCLUDE_PUBLISH_SCOPE=1` is set in the environment. This is enforced in two places (`buildAuth` at scope-construction time and `publishVersion` at call time) and is independent of the per-call `approval_token`. Leave it unset to make publishing impossible regardless of any other input.
+1. The MCP runtime uses only workload credentials: service-account JSON, external-account/WIF JSON, or explicit metadata-server credentials.
+2. The runtime rejects local `authorized_user` ADC files; a human refresh token must not operate the MCP server.
+3. A human GA4/GTM admin is used only once to bootstrap product access with `analytics.manage.users` and `tagmanager.manage.users`.
+4. `npm run bootstrap:access` grants the service account GA4 `predefinedRoles/editor` and GTM container `edit` by default.
+5. The MCP client `env` block, not this repo's `.env` file, is the normal place to pass `GOOGLE_APPLICATION_CREDENTIALS`.
+6. `INCLUDE_PUBLISH_SCOPE` stays unset unless publishing through this MCP server is explicitly approved.
 
 ## 5. Local run
 
@@ -151,7 +144,7 @@ Each guard is a pure, unit-tested function; the apply/gated tools layer them def
 
 ## 9. Known limitations
 
-- **OAuth refresh-token auth is not wired yet** — only the service-account / ADC path works today.
+- **Runtime OAuth refresh-token auth is deliberately unsupported** — use the one-time bootstrap CLI to grant product access, then run the MCP as a service account or workload identity.
 - **GA Admin archive operations are unsupported** — archiving custom dimensions/metrics/key events returns `API_UNSUPPORTED`; no `archive*` functions are exported. Upserts that would change immutable fields (`parameterName`, `scope`) also throw `API_UNSUPPORTED` rather than failing mid-call.
 - **Measurement Protocol secrets** — listing returns names/display names only; secret values are stripped at the wrapper boundary and never echoed.
 - **GTM 3-workspace-per-container cap** — `create_gtm_workspace` blocks with `WORKSPACE_CAPACITY_BLOCKED` when full; an existing workspace must be merged or deleted first.

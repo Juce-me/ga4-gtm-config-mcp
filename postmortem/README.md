@@ -15,7 +15,7 @@ Add entries here in creation order:
 
 | ID | Title | Date | Severity | Status |
 | --- | --- | --- | --- | --- |
-| TODO | TODO | TODO | TODO | TODO |
+| [MRT001](MRT001-service-account-auth-bootstrap.md) | service-account-auth-bootstrap | 2026-05-29 | High | Resolved |
 
 ## Postmortem Template
 

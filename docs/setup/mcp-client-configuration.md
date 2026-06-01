@@ -12,6 +12,8 @@ This file answers: **where does `GOOGLE_APPLICATION_CREDENTIALS` go, and what is
 
 **Runtime credential file**: service-account JSON or external-account/WIF JSON. Its absolute path is passed as `GOOGLE_APPLICATION_CREDENTIALS`.
 
+This path is authentication plumbing only. It does not grant GA4/GTM configuration access; product access must already exist through [Product access bootstrap](product-access-bootstrap.md) or an equivalent verified grant.
+
 ## Build The Server
 
 ```bash

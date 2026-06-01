@@ -54,8 +54,9 @@ The short version:
 2. The runtime rejects local `authorized_user` ADC files; a human refresh token must not operate the MCP server.
 3. A human GA4/GTM admin is used only once to bootstrap product access with `analytics.manage.users` and `tagmanager.manage.users`.
 4. `npm run bootstrap:access` grants the service account GA4 `predefinedRoles/editor` and GTM container `edit` by default.
-5. The MCP client `env` block, not this repo's `.env` file, is the normal place to pass `GOOGLE_APPLICATION_CREDENTIALS`.
-6. `INCLUDE_PUBLISH_SCOPE` stays unset unless publishing through this MCP server is explicitly approved.
+5. `GOOGLE_APPLICATION_CREDENTIALS` only tells Google Auth which workload credential to use; it does not grant GA4/GTM product access by itself.
+6. The MCP client `env` block, not this repo's `.env` file, is the normal place to pass `GOOGLE_APPLICATION_CREDENTIALS`.
+7. `INCLUDE_PUBLISH_SCOPE` stays unset unless publishing through this MCP server is explicitly approved.
 
 ## 5. Local run
 
@@ -78,7 +79,7 @@ For Claude Desktop (`claude_desktop_config.json`) or Claude Code (`.mcp.json`):
       "command": "node",
       "args": ["/absolute/path/to/ga4-gtm-config-mcp/dist/server.js"],
       "env": {
-        "GOOGLE_APPLICATION_CREDENTIALS": "/absolute/path/to/service-account.json"
+        "GOOGLE_APPLICATION_CREDENTIALS": "/absolute/path/to/service-account-or-external-account.json"
       }
     }
   }

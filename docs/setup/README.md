@@ -34,8 +34,10 @@ The Google Cloud project does **not** automatically grant access to GA4 or GTM. 
 2. Enable the required APIs in the Google Cloud project that owns that credential.
 3. Use a human GA4/GTM admin only once to create a short-lived OAuth access token.
 4. Run `npm run bootstrap:access` to grant product-level GA4/GTM access to the service-account email.
-5. Configure the MCP client to pass `GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/to/credential.json`.
+5. Configure the MCP client to pass `GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/to/credential.json` for runtime authentication.
 6. Run MCP tools against reviewed `*.mcp-execution.yaml` specs.
+
+`GOOGLE_APPLICATION_CREDENTIALS` is not the product-access grant. It is only how the MCP process authenticates as the workload identity after GA4/GTM access has been granted separately.
 
 ## Read Next
 

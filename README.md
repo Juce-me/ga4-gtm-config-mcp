@@ -26,6 +26,12 @@ A custom [Model Context Protocol](https://modelcontextprotocol.io) server for **
 
 This server is the **execution layer**. The `google-analytics-implementation-planner` skill is the **planning layer**: it decides what events, dimensions, and tags should exist and emits the `*.mcp-execution.yaml` spec. A human reviews that spec, then this server executes it within strict safety rails. The split is deliberate — planning judgment never lives in the tool that holds write credentials.
 
+Typical local workflow:
+
+1. In the application repo that needs GA4/GTM configuration, run the `google-analytics-skill` / `google-analytics-implementation-planner` setup and produce a reviewed `*.mcp-execution.yaml` spec.
+2. In this `ga4-gtm-config-mcp` repo, build the MCP server and register its built `dist/server.js` with your local MCP host.
+3. Run Codex or another MCP host inside the application repo, then call this server's tools with `spec_path` pointing at that app repo's reviewed `*.mcp-execution.yaml`.
+
 See [`examples/mcp-execution.example.yaml`](examples/mcp-execution.example.yaml) for a complete, validator-passing spec with placeholder IDs.
 
 ## 3. Installation
@@ -87,6 +93,21 @@ For Claude Desktop (`claude_desktop_config.json`) or Claude Code (`.mcp.json`):
 ```
 
 For impersonated ADC, also add `"ALLOW_GOOGLE_IMPERSONATED_ADC": "1"` and use an ADC file with top-level `"type": "impersonated_service_account"`. Add `"INCLUDE_PUBLISH_SCOPE": "1"` to the `env` block only if and when you have explicitly decided to allow publishing.
+
+For Codex local setup, run this from the `ga4-gtm-config-mcp` repo root after `npm run build`. The `$(pwd)` value must point to this MCP server repo, not the application repo that contains the `google-analytics-skill` output:
+
+```bash
+mkdir -p ~/.codex && cat > ~/.codex/config.toml <<EOF
+[mcp_servers.ga4-gtm-config]
+command = "node"
+args = ["$(pwd)/dist/server.js"]
+
+[mcp_servers.ga4-gtm-config.env]
+GOOGLE_CLOUD_PROJECT = "<project-id>"
+EOF
+```
+
+After that, open Codex in the application repo that needs GA4/GTM configuration and use the generated `*.mcp-execution.yaml` from the `google-analytics-skill` setup as the tool `spec_path`. Add `GOOGLE_APPLICATION_CREDENTIALS` and any required auth opt-in variables to the Codex env block for real GA4/GTM API calls.
 
 ## 6.1 ID formats
 

@@ -23,6 +23,6 @@ export async function buildAuth(opts: { mode: AuthMode }) {
     return new google.auth.Compute({ scopes: [...scopes] });
   }
 
-  // GoogleAuth picks up GOOGLE_APPLICATION_CREDENTIALS automatically (service account).
+  // GoogleAuth picks up GOOGLE_APPLICATION_CREDENTIALS automatically for JSON workload credentials.
   return new google.auth.GoogleAuth({ scopes: [...scopes] });
 }

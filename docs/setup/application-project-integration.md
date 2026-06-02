@@ -35,6 +35,7 @@ Do not store this MCP server's:
 
 - service-account JSON key
 - WIF external-account credential file unless it is intentionally scoped to that repo's CI and kept in secret storage
+- impersonated ADC / `application_default_credentials.json`; it includes nested human `source_credentials`
 - OAuth Web client secret
 - one-time OAuth access token
 - refresh token
@@ -72,7 +73,7 @@ GA4 property: properties/GA4_PROPERTY_ID
 GTM account: GTM_ACCOUNT_ID
 GTM container: GTM_CONTAINER_ID
 service account: SERVICE_ACCOUNT_NAME@PROJECT_ID.iam.gserviceaccount.com
-credential path on this machine: /absolute/path/to/credential.json
+credential path on this machine: <credential-json-path>
 ```
 
 That note is operational configuration, not product documentation.

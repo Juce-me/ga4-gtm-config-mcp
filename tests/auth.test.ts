@@ -22,6 +22,21 @@ function writeCredential(body: object): string {
   return path;
 }
 
+function impersonatedAdc(): object {
+  return {
+    type: "impersonated_service_account",
+    source_credentials: {
+      type: "authorized_user",
+      client_id: "fake",
+      client_secret: "fake",
+      refresh_token: "fake",
+    },
+    service_account_impersonation_url: "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/service@example.iam.gserviceaccount.com:generateAccessToken",
+    delegates: [],
+    scopes: ["https://www.googleapis.com/auth/tagmanager.readonly"],
+  };
+}
+
 describe("auth scopes", () => {
   it("READ_SCOPES contains tag manager + analytics read", () => {
     expect(READ_SCOPES).toContain("https://www.googleapis.com/auth/tagmanager.readonly");
@@ -63,6 +78,9 @@ describe("buildAuth", () => {
   beforeEach(() => {
     vi.unstubAllEnvs();
     vi.stubEnv("ALLOW_GOOGLE_METADATA_AUTH", "1");
+    vi.stubEnv("GOOGLE_APPLICATION_CREDENTIALS", "");
+    vi.stubEnv("GOOGLE_CLOUD_PROJECT", "test-project");
+    vi.stubEnv("GCLOUD_PROJECT", "test-project");
   });
   afterEach(() => {
     vi.unstubAllEnvs();
@@ -114,5 +132,33 @@ describe("buildAuth", () => {
     }));
 
     await expect(buildAuth({ mode: "read" })).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
+  });
+
+  it("accepts impersonated ADC credentials when explicitly allowed", async () => {
+    vi.stubEnv("ALLOW_GOOGLE_METADATA_AUTH", "");
+    vi.stubEnv("ALLOW_GOOGLE_IMPERSONATED_ADC", "1");
+    vi.stubEnv("GOOGLE_APPLICATION_CREDENTIALS", writeCredential(impersonatedAdc()));
+
+    const auth = await buildAuth({ mode: "read" });
+    expect(auth.constructor.name).toBe("GoogleAuth");
+    if (!("getClient" in auth)) throw new Error("Expected GoogleAuth for impersonated ADC");
+    const client = await auth.getClient();
+    expect(client.constructor.name).toBe("Impersonated");
+  });
+
+  it("rejects plain user ADC credentials even when impersonated ADC is allowed", async () => {
+    vi.stubEnv("ALLOW_GOOGLE_METADATA_AUTH", "");
+    vi.stubEnv("ALLOW_GOOGLE_IMPERSONATED_ADC", "1");
+    vi.stubEnv("GOOGLE_APPLICATION_CREDENTIALS", writeCredential({
+      type: "authorized_user",
+      client_id: "fake",
+      client_secret: "fake",
+      refresh_token: "fake",
+    }));
+
+    await expect(buildAuth({ mode: "read" })).rejects.toMatchObject({
+      code: "PERMISSION_DENIED",
+      message: expect.stringContaining("plain authorized_user ADC"),
+    });
   });
 });

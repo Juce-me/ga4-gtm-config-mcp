@@ -35,6 +35,15 @@ Required for local JSON credentials:
 GOOGLE_APPLICATION_CREDENTIALS=<credential-json-path>
 ```
 
+Not used by this server:
+
+```text
+GOOGLE_CLOUD_PROJECT
+GCLOUD_PROJECT
+```
+
+Do not add project env vars to local MCP config for this repo. The MCP server does not read them, does not need a quota-project setting, and receives GA4/GTM target IDs from the `mcp-execution.yaml` spec and tool arguments.
+
 Optional:
 
 ```text
@@ -109,20 +118,20 @@ Publishing remains disabled unless you deliberately add:
 
 ## Codex Local Setup Example
 
-From the repo root, after `npm run build`:
+Add this block to `~/.codex/config.toml` after `npm run build`:
 
-```bash
-mkdir -p ~/.codex && cat > ~/.codex/config.toml <<EOF
+```toml
 [mcp_servers.ga4-gtm-config]
 command = "node"
-args = ["$(pwd)/dist/server.js"]
+args = ["<repo-path>/dist/server.js"]
 
 [mcp_servers.ga4-gtm-config.env]
-GOOGLE_CLOUD_PROJECT = "<project-id>"
-EOF
+GOOGLE_APPLICATION_CREDENTIALS = "<credential-json-path>"
+# Required only when the credential JSON has top-level type = "impersonated_service_account".
+# ALLOW_GOOGLE_IMPERSONATED_ADC = "1"
 ```
 
-For real GA4/GTM API calls, also add the runtime credential environment variables described above, such as `GOOGLE_APPLICATION_CREDENTIALS` and, for impersonated ADC, `ALLOW_GOOGLE_IMPERSONATED_ADC`.
+Use an absolute `args` path to this repo's built `dist/server.js`; run Codex from the separate application repo and pass that repo's generated `*.mcp-execution.yaml` as `spec_path`. Do not add `GOOGLE_CLOUD_PROJECT`; it is not part of this server's local runtime configuration.
 
 ## Local Real-API Testing Example
 

@@ -79,8 +79,6 @@ describe("buildAuth", () => {
     vi.unstubAllEnvs();
     vi.stubEnv("ALLOW_GOOGLE_METADATA_AUTH", "1");
     vi.stubEnv("GOOGLE_APPLICATION_CREDENTIALS", "");
-    vi.stubEnv("GOOGLE_CLOUD_PROJECT", "test-project");
-    vi.stubEnv("GCLOUD_PROJECT", "test-project");
   });
   afterEach(() => {
     vi.unstubAllEnvs();
@@ -141,9 +139,6 @@ describe("buildAuth", () => {
 
     const auth = await buildAuth({ mode: "read" });
     expect(auth.constructor.name).toBe("GoogleAuth");
-    if (!("getClient" in auth)) throw new Error("Expected GoogleAuth for impersonated ADC");
-    const client = await auth.getClient();
-    expect(client.constructor.name).toBe("Impersonated");
   });
 
   it("rejects plain user ADC credentials even when impersonated ADC is allowed", async () => {

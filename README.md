@@ -61,8 +61,9 @@ The short version:
 3. A human GA4/GTM admin is used only once to bootstrap product access with `analytics.manage.users` and `tagmanager.manage.users`.
 4. `npm run bootstrap:access` grants the service account GA4 `predefinedRoles/editor` and GTM container `edit` by default.
 5. `GOOGLE_APPLICATION_CREDENTIALS` only tells Google Auth which workload credential to use; it does not grant GA4/GTM product access by itself.
-6. The MCP client `env` block, not this repo's `.env` file, is the normal place to pass `GOOGLE_APPLICATION_CREDENTIALS`.
-7. `INCLUDE_PUBLISH_SCOPE` stays unset unless publishing through this MCP server is explicitly approved.
+6. The MCP client `env` block, not this repo's `.env` file, is the normal place to pass runtime auth variables.
+7. Do not set `GOOGLE_CLOUD_PROJECT` for this MCP server. The code does not read it; GA4/GTM targets come from the spec and tool arguments.
+8. `INCLUDE_PUBLISH_SCOPE` stays unset unless publishing through this MCP server is explicitly approved.
 
 ## 5. Local run
 
@@ -94,20 +95,20 @@ For Claude Desktop (`claude_desktop_config.json`) or Claude Code (`.mcp.json`):
 
 For impersonated ADC, also add `"ALLOW_GOOGLE_IMPERSONATED_ADC": "1"` and use an ADC file with top-level `"type": "impersonated_service_account"`. Add `"INCLUDE_PUBLISH_SCOPE": "1"` to the `env` block only if and when you have explicitly decided to allow publishing.
 
-For Codex local setup, run this from the `ga4-gtm-config-mcp` repo root after `npm run build`. The `$(pwd)` value must point to this MCP server repo, not the application repo that contains the `google-analytics-skill` output:
+For Codex local setup, add this to `~/.codex/config.toml` after `npm run build`. The `args` path must point to this MCP server repo, not the application repo that contains the `google-analytics-skill` output:
 
-```bash
-mkdir -p ~/.codex && cat > ~/.codex/config.toml <<EOF
+```toml
 [mcp_servers.ga4-gtm-config]
 command = "node"
-args = ["$(pwd)/dist/server.js"]
+args = ["<repo-path>/dist/server.js"]
 
 [mcp_servers.ga4-gtm-config.env]
-GOOGLE_CLOUD_PROJECT = "<project-id>"
-EOF
+GOOGLE_APPLICATION_CREDENTIALS = "<credential-json-path>"
+# Required only when the credential JSON has top-level type = "impersonated_service_account".
+# ALLOW_GOOGLE_IMPERSONATED_ADC = "1"
 ```
 
-After that, open Codex in the application repo that needs GA4/GTM configuration and use the generated `*.mcp-execution.yaml` from the `google-analytics-skill` setup as the tool `spec_path`. Add `GOOGLE_APPLICATION_CREDENTIALS` and any required auth opt-in variables to the Codex env block for real GA4/GTM API calls.
+After that, open Codex in the application repo that needs GA4/GTM configuration and use the generated `*.mcp-execution.yaml` from the `google-analytics-skill` setup as the tool `spec_path`. Do not add `GOOGLE_CLOUD_PROJECT`; this server does not use a quota-project env var for GA4/GTM configuration.
 
 ## 6.1 ID formats
 

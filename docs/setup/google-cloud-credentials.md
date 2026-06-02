@@ -6,6 +6,8 @@ This file answers: **where do I create the runtime identity, what APIs do I enab
 
 **Google Cloud project**: the project that owns the service account, OAuth client, enabled APIs, and optional WIF setup. It does not have to be the same repo, GA4 account, GTM account, or application product being measured. Pick one operations-owned project and use it consistently.
 
+The project ID belongs in Google Cloud setup commands, not in the local MCP server env block. This server does not read `GOOGLE_CLOUD_PROJECT` or `GCLOUD_PROJECT`; GA4/GTM targets come from the spec and tool arguments.
+
 **Service account**: the non-human Google identity the MCP server runs as. Its email has this shape:
 
 ```text

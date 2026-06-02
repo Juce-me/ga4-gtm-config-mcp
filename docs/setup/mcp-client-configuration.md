@@ -107,6 +107,23 @@ Publishing remains disabled unless you deliberately add:
 "INCLUDE_PUBLISH_SCOPE": "1"
 ```
 
+## Codex Local Setup Example
+
+From the repo root, after `npm run build`:
+
+```bash
+mkdir -p ~/.codex && cat > ~/.codex/config.toml <<EOF
+[mcp_servers.ga4-gtm-config]
+command = "node"
+args = ["$(pwd)/dist/server.js"]
+
+[mcp_servers.ga4-gtm-config.env]
+GOOGLE_CLOUD_PROJECT = "<project-id>"
+EOF
+```
+
+For real GA4/GTM API calls, also add the runtime credential environment variables described above, such as `GOOGLE_APPLICATION_CREDENTIALS` and, for impersonated ADC, `ALLOW_GOOGLE_IMPERSONATED_ADC`.
+
 ## Local Real-API Testing Example
 
 Local MCP testing against real GA4/GTM APIs can use an impersonated service account:

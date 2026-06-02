@@ -233,7 +233,12 @@ This is an execution layer, not an analytics planner. It must not invent events,
 - Tighten an existing line instead of adding a near-duplicate.
 - Delete stale learnings when the underlying issue goes away.
 - Before documenting auth setup, separate runtime credential authentication (`GOOGLE_APPLICATION_CREDENTIALS`, WIF, or metadata) from GA4/GTM product-access grants, and verify both mechanics; do not assume service accounts can be added through product UI user flows.
+- When documenting Google Cloud runtime credentials, present service-account JSON keys as an optional fallback only; include the `constraints/iam.disableServiceAccountKeyCreation` path to WIF or metadata credentials.
 - Never put real project IDs, account IDs, property IDs, container IDs, or service-account emails in public repo docs; use placeholders.
+- For gcloud service-account impersonation ADC, require top-level `type: "impersonated_service_account"`; top-level `authorized_user` remains plain user ADC even with `service_account_impersonation_url`.
+- Reject top-level URL override fields such as `endpoint` before passing impersonated ADC JSON to google-auth-library.
+- For impersonated ADC, only allow omitted or exact `googleapis.com` universe-domain fields at the top level and under `source_credentials`.
+- For impersonated ADC, require `service_account_impersonation_url` to use `https:` and the exact `/v1/projects/-/serviceAccounts/<target>:generateAccessToken` path shape.
 
 When the user corrects your approach, append a one-line rule here before ending the session. Write it concretely ("Always use X for Y"), never abstractly ("be careful with Y"). If an existing line already covers the correction, tighten it instead of adding a new one. Remove lines when the underlying issue goes away (model upgrades, refactors, process changes).
 

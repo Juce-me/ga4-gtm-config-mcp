@@ -4,7 +4,7 @@ This setup has three different identities. Keep them separate:
 
 | Name | What it is | Where it lives | What it is used for | Stored by MCP? |
 |------|------------|----------------|---------------------|----------------|
-| **Service account** | Google workload identity such as `SERVICE_ACCOUNT_NAME@PROJECT_ID.iam.gserviceaccount.com` | Google Cloud project | The MCP server's runtime identity | Yes, as service-account JSON or WIF config path |
+| **Service account** | Google workload identity such as `SERVICE_ACCOUNT_NAME@PROJECT_ID.iam.gserviceaccount.com` | Google Cloud project | The MCP server's runtime identity | Yes, as a service-account JSON, WIF config, impersonated ADC, or metadata identity |
 | **OAuth Web client** | Client ID + client secret for an OAuth consent flow | Google Auth Platform in a Google Cloud project | Lets OAuth Playground mint one short-lived human-admin access token | No |
 | **Human admin user** | A real Google user with GA4/GTM user-management rights | Google Account / Workspace | Approves the one-time OAuth bootstrap token | No |
 | **MCP client** | Claude Desktop, Claude Code, Codex, or another MCP host | Operator machine | Starts `node dist/server.js` over stdio and passes environment variables | N/A |
@@ -29,19 +29,21 @@ The Google Cloud project does **not** automatically grant access to GA4 or GTM. 
 ## Required Flow
 
 1. Create a Google Cloud runtime credential:
-   - service-account JSON for local/small deployments, or
-   - external-account / Workload Identity Federation JSON for keyless production.
+   - external-account / Workload Identity Federation JSON for keyless external runtimes,
+   - impersonated ADC for local real-API testing when explicitly enabled,
+   - metadata-server credentials for trusted Google Cloud runtimes, or
+   - service-account JSON only when key creation is explicitly allowed.
 2. Enable the required APIs in the Google Cloud project that owns that credential.
 3. Use a human GA4/GTM admin only once to create a short-lived OAuth access token.
 4. Run `npm run bootstrap:access` to grant product-level GA4/GTM access to the service-account email.
-5. Configure the MCP client to pass `GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/to/credential.json` for runtime authentication.
+5. Configure the MCP client to pass `GOOGLE_APPLICATION_CREDENTIALS=<credential-json-path>` for runtime authentication.
 6. Run MCP tools against reviewed `*.mcp-execution.yaml` specs.
 
 `GOOGLE_APPLICATION_CREDENTIALS` is not the product-access grant. It is only how the MCP process authenticates as the workload identity after GA4/GTM access has been granted separately.
 
 ## Read Next
 
-- [Google Cloud credentials](google-cloud-credentials.md) explains the service account, service-account key, WIF credential, API enablement, and exact Cloud Console pages.
+- [Google Cloud credentials](google-cloud-credentials.md) explains the service account, WIF credential, impersonated ADC, metadata credential, optional service-account key, API enablement, and exact Cloud Console pages.
 - [Product access bootstrap](product-access-bootstrap.md) explains the OAuth Web client, OAuth Playground, one-time access token, and bootstrap CLI.
 - [MCP client configuration](mcp-client-configuration.md) explains where `GOOGLE_APPLICATION_CREDENTIALS` goes for the MCP host.
 - [Application project integration](application-project-integration.md) explains what other app repos must provide and what they must not store.

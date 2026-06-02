@@ -43,15 +43,15 @@ npm run typecheck
 
 Start with [Setup overview](docs/setup/README.md). It defines every identity and credential involved, then links to the focused runbooks:
 
-- [Google Cloud credentials](docs/setup/google-cloud-credentials.md): where to create the Google Cloud project resources, which APIs to enable, what a service account is, and when to use Workload Identity Federation instead of a JSON key.
+- [Google Cloud credentials](docs/setup/google-cloud-credentials.md): where to create the Google Cloud project resources, which APIs to enable, what a service account is, and when to use Workload Identity Federation or explicitly enabled impersonated ADC instead of a JSON key.
 - [Product access bootstrap](docs/setup/product-access-bootstrap.md): how a human GA4/GTM admin creates a one-time OAuth access token and grants GA4/GTM access to the service account through official APIs.
 - [MCP client configuration](docs/setup/mcp-client-configuration.md): how Claude Desktop, Claude Code, Codex, or another MCP host launches this server and passes `GOOGLE_APPLICATION_CREDENTIALS`.
 - [Application project integration](docs/setup/application-project-integration.md): what other application repos should provide, and what they must not store.
 
 The short version:
 
-1. The MCP runtime uses only workload credentials: service-account JSON, external-account/WIF JSON, or explicit metadata-server credentials.
-2. The runtime rejects local `authorized_user` ADC files; a human refresh token must not operate the MCP server.
+1. The MCP runtime uses only workload credentials: service-account JSON, external-account/WIF JSON, explicitly enabled impersonated ADC, or explicit metadata-server credentials.
+2. The runtime rejects local plain `authorized_user` ADC files; a human refresh token must not operate the MCP server.
 3. A human GA4/GTM admin is used only once to bootstrap product access with `analytics.manage.users` and `tagmanager.manage.users`.
 4. `npm run bootstrap:access` grants the service account GA4 `predefinedRoles/editor` and GTM container `edit` by default.
 5. `GOOGLE_APPLICATION_CREDENTIALS` only tells Google Auth which workload credential to use; it does not grant GA4/GTM product access by itself.
@@ -77,16 +77,16 @@ For Claude Desktop (`claude_desktop_config.json`) or Claude Code (`.mcp.json`):
   "mcpServers": {
     "ga4-gtm-config": {
       "command": "node",
-      "args": ["/absolute/path/to/ga4-gtm-config-mcp/dist/server.js"],
+      "args": ["<repo-path>/dist/server.js"],
       "env": {
-        "GOOGLE_APPLICATION_CREDENTIALS": "/absolute/path/to/service-account-or-external-account.json"
+        "GOOGLE_APPLICATION_CREDENTIALS": "<credential-json-path>"
       }
     }
   }
 }
 ```
 
-Add `"INCLUDE_PUBLISH_SCOPE": "1"` to the `env` block only if and when you have explicitly decided to allow publishing.
+For impersonated ADC, also add `"ALLOW_GOOGLE_IMPERSONATED_ADC": "1"` and use an ADC file with top-level `"type": "impersonated_service_account"`. Add `"INCLUDE_PUBLISH_SCOPE": "1"` to the `env` block only if and when you have explicitly decided to allow publishing.
 
 ## 6.1 ID formats
 

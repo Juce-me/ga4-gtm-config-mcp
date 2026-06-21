@@ -131,7 +131,7 @@ GOOGLE_APPLICATION_CREDENTIALS = "<credential-json-path>"
 # ALLOW_GOOGLE_IMPERSONATED_ADC = "1"
 ```
 
-Use an absolute `args` path to this repo's built `dist/server.js`; run Codex from the separate application repo and pass that repo's generated `*.mcp-execution.yaml` as `spec_path`. Do not add `GOOGLE_CLOUD_PROJECT`; it is not part of this server's local runtime configuration.
+Use absolute, shell-expanded paths for both `<repo-path>` and `<credential-json-path>` in MCP client config. Do not rely on `~`, `$HOME`, or a path relative to the application repo; MCP hosts may launch the server from a different working directory. Run Codex from the separate application repo and pass that repo's generated `*.mcp-execution.yaml` as `spec_path`. Do not add `GOOGLE_CLOUD_PROJECT`; it is not part of this server's local runtime configuration.
 
 ## Local Real-API Testing Example
 

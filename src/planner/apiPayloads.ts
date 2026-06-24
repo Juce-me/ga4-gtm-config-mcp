@@ -104,17 +104,17 @@ export function desiredTagToGtmPayload(tg: NormalizedGtm["tags"][number], trigge
     { type: "template", key: "eventName", value: tg.config.eventName },
   ];
   if (tg.config.measurementId) {
-    parameter.push({ type: "template", key: "measurementId", value: tg.config.measurementId });
+    parameter.push({ type: "template", key: "measurementIdOverride", value: tg.config.measurementId });
   }
   const eventParameters = Object.entries(tg.config.params).map(([k, v]) => ({
     type: "map",
     map: [
-      { type: "template", key: "name", value: k },
-      { type: "template", key: "value", value: v },
+      { type: "template", key: "parameter", value: k },
+      { type: "template", key: "parameterValue", value: v },
     ],
   }));
   if (eventParameters.length > 0) {
-    parameter.push({ type: "list", key: "eventParameters", list: eventParameters });
+    parameter.push({ type: "list", key: "eventSettingsTable", list: eventParameters });
   }
   return {
     name: tg.name,

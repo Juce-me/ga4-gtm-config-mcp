@@ -81,7 +81,7 @@ describe("desired→GTM payload shapes", () => {
     expect(payload.customEventFilter[0]!.type).toBe("EQUALS");
   });
 
-  it("tag: GA4 - Page View body has eventName + measurementId + extra params and trigger ID", () => {
+  it("tag: GA4 - Page View body has eventName + measurementIdOverride + extra params and trigger ID", () => {
     const payload = desiredTagToGtmPayload({
       kind: "gtm_tag",
       name: "GA4 - Page View",
@@ -97,16 +97,21 @@ describe("desired→GTM payload shapes", () => {
     expect(payload.type).toBe("gaawe");
     expect(payload.firingTriggerId).toEqual(["17"]);
     const keys = payload.parameter.map((p) => p.key);
-    expect(keys).toEqual(["eventName", "measurementId", "eventParameters"]);
+    expect(keys).toEqual(["eventName", "measurementIdOverride", "eventSettingsTable"]);
+    expect(payload.parameter[1]).toEqual({
+      type: "template",
+      key: "measurementIdOverride",
+      value: "G-XXXXXXX000",
+    });
     expect(payload.parameter[2]).toEqual({
       type: "list",
-      key: "eventParameters",
+      key: "eventSettingsTable",
       list: [
         {
           type: "map",
           map: [
-            { type: "template", key: "name", value: "page_name" },
-            { type: "template", key: "value", value: "{{DLV - userParams.page_name}}" },
+            { type: "template", key: "parameter", value: "page_name" },
+            { type: "template", key: "parameterValue", value: "{{DLV - userParams.page_name}}" },
           ],
         },
       ],

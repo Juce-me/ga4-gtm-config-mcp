@@ -76,11 +76,22 @@ export function desiredTriggerToGtmPayload(t: NormalizedGtm["triggers"][number])
     ? [condition("equals", "{{_event}}", t.config.eventName)]
     : [];
 
-  return {
+  const payload: {
+    name: string;
+    type: string;
+    customEventFilter?: GtmCondition[];
+    filter?: GtmCondition[];
+  } = {
     name: t.name,
     type,
-    customEventFilter: [...eventFilter, ...filters],
   };
+  if (type === "customEvent") {
+    if (eventFilter.length > 0) payload.customEventFilter = eventFilter;
+    if (filters.length > 0) payload.filter = filters;
+    return payload;
+  }
+  if (filters.length > 0) payload.filter = filters;
+  return payload;
 }
 
 export function desiredTagToGtmPayload(tg: NormalizedGtm["tags"][number], triggerIdsByName: Map<string, string>) {

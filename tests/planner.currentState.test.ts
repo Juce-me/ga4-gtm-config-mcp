@@ -20,6 +20,7 @@ describe("toCurrentState", () => {
         }],
         triggers: [{ name: "CE - userevent - pageview", type: "customEvent", customEventFilter: [
           { type: "EQUALS", parameter: [{ key: "arg0", value: "{{_event}}" }, { key: "arg1", value: "userevent" }] },
+        ], filter: [
           { type: "EQUALS", parameter: [{ key: "arg0", value: "{{DLV - event_type}}" }, { key: "arg1", value: "pageview" }] },
         ] }],
         tags: [{ name: "GA4 - Page View", type: "gaawe", parameter: [

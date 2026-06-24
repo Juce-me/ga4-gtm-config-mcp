@@ -49,7 +49,7 @@ describe("desired→GTM payload shapes", () => {
     });
   });
 
-  it("trigger: maps snake_case to camelCase and produces customEventFilter", () => {
+  it("trigger: separates custom event name from additional trigger filters", () => {
     const payload = desiredTriggerToGtmPayload({
       kind: "gtm_trigger",
       name: "CE - userevent - pageview",
@@ -68,6 +68,8 @@ describe("desired→GTM payload shapes", () => {
           { type: "template", key: "arg1", value: "userevent" },
         ],
       },
+    ]);
+    expect(payload.filter).toEqual([
       {
         type: "EQUALS",
         parameter: [

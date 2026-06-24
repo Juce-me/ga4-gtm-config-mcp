@@ -140,11 +140,10 @@ export function toCurrentState(raw: {
 // If the shape doesn't match (e.g., no parameter array), we produce a best-effort
 // entry with empty strings so the diff at least sees the entity as present.
 function normalizeGtmTrigger(t: AnyObj): NormalizedGtm["triggers"][number] {
-  const rawFilters = (Array.isArray(t["customEventFilter"])
-    ? t["customEventFilter"]
-    : Array.isArray(t["filter"])
-      ? t["filter"]
-      : []) as AnyObj[];
+  const rawFilters = [
+    ...(Array.isArray(t["customEventFilter"]) ? t["customEventFilter"] as AnyObj[] : []),
+    ...(Array.isArray(t["filter"]) ? t["filter"] as AnyObj[] : []),
+  ];
 
   let eventName: string | undefined;
   const filters = rawFilters.flatMap((f) => {

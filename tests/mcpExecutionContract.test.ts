@@ -108,6 +108,8 @@ describe("MCP execution contract", () => {
             { type: "template", key: "arg1", value: "userevent" },
           ],
         },
+      ],
+      filter: [
         {
           type: "EQUALS",
           parameter: [

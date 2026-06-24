@@ -76,7 +76,7 @@ export function toCurrentState(raw: {
             parameter_name: parameterName,
             display_name: str(cm["displayName"]),
             scope: str(cm["scope"]),
-            unit: str(cm["unit"]),
+            unit: str(cm["measurementUnit"] ?? cm["unit"]),
             ...(cm["description"] !== undefined ? { description: str(cm["description"]) } : {}),
           },
         };

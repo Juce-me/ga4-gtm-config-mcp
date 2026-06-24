@@ -1,12 +1,32 @@
 import { describe, it, expect } from "vitest";
 import {
   desiredBuiltInVariableToGtmType,
+  desiredCustomMetricToGa4Payload,
   desiredVariableToGtmPayload,
   desiredTriggerToGtmPayload,
   desiredTagToGtmPayload,
 } from "../src/planner/apiPayloads.js";
 
 describe("desired→GTM payload shapes", () => {
+  it("custom metric: maps internal unit to GA Admin measurementUnit", () => {
+    const payload = desiredCustomMetricToGa4Payload({
+      parameter_name: "time_seconds",
+      display_name: "Swim time seconds",
+      scope: "EVENT",
+      unit: "SECONDS",
+      description: "Swim result time in seconds.",
+    });
+
+    expect(payload).toEqual({
+      parameterName: "time_seconds",
+      displayName: "Swim time seconds",
+      scope: "EVENT",
+      measurementUnit: "SECONDS",
+      description: "Swim result time in seconds.",
+    });
+    expect("unit" in payload).toBe(false);
+  });
+
   it("built-in variable: maps planner display names to GTM API type values", () => {
     expect(desiredBuiltInVariableToGtmType("Page URL")).toBe("pageUrl");
     expect(desiredBuiltInVariableToGtmType("Page Path")).toBe("pagePath");

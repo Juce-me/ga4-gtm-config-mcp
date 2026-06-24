@@ -44,7 +44,7 @@ describe("ga4 upsert helpers", () => {
     };
 
     await upsertCustomDimension(fakeClient as unknown as Parameters<typeof upsertCustomDimension>[0], "1", { parameterName: "p", displayName: "P", scope: "EVENT" });
-    await upsertCustomMetric(fakeClient as unknown as Parameters<typeof upsertCustomMetric>[0], "1", { parameterName: "t", displayName: "T", scope: "EVENT", unit: "SECONDS" });
+    await upsertCustomMetric(fakeClient as unknown as Parameters<typeof upsertCustomMetric>[0], "1", { parameterName: "t", displayName: "T", scope: "EVENT", measurementUnit: "SECONDS" });
     await upsertKeyEvent(fakeClient as unknown as Parameters<typeof upsertKeyEvent>[0], "1", { eventName: "result_view" });
 
     expect(parents).toEqual(["properties/1", "properties/1", "properties/1"]);
@@ -94,7 +94,7 @@ describe("ga4 upsert helpers", () => {
 
   it("CM and KE: smoke create path", async () => {
     const spy1: Spy = { calls: [] };
-    expect((await upsertCustomMetric(fake(spy1, "customMetrics"), "properties/1", { parameterName: "t", displayName: "T", scope: "EVENT", unit: "SECONDS" })).action).toBe("create");
+    expect((await upsertCustomMetric(fake(spy1, "customMetrics"), "properties/1", { parameterName: "t", displayName: "T", scope: "EVENT", measurementUnit: "SECONDS" })).action).toBe("create");
     const spy2: Spy = { calls: [] };
     expect((await upsertKeyEvent(fake(spy2, "keyEvents"), "properties/1", { eventName: "result_view" })).action).toBe("create");
   });

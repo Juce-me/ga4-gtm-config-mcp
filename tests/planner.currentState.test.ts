@@ -6,7 +6,7 @@ describe("toCurrentState", () => {
     const raw = {
       ga4: {
         customDimensions: [{ name: "properties/1/customDimensions/2", parameterName: "feature_name", displayName: "Feature name", scope: "EVENT", description: "x" }],
-        customMetrics: [{ name: "properties/1/customMetrics/3", parameterName: "time_seconds", displayName: "Result time seconds", scope: "EVENT", unit: "SECONDS" }],
+        customMetrics: [{ name: "properties/1/customMetrics/3", parameterName: "time_seconds", displayName: "Result time seconds", scope: "EVENT", measurementUnit: "SECONDS" }],
         keyEvents: [{ name: "properties/1/keyEvents/4", eventName: "result_view" }],
       },
       gtm: {

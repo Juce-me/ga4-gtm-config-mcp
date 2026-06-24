@@ -47,7 +47,7 @@ export function desiredCustomMetricToGa4Payload(config: NormalizedGa4["customMet
     parameterName: config.parameter_name,
     displayName: config.display_name,
     scope: config.scope,
-    unit: config.unit,
+    measurementUnit: config.unit,
     ...(config.description !== undefined ? { description: config.description } : {}),
   };
 }

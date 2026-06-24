@@ -6,7 +6,7 @@ describe("toCurrentState", () => {
     const raw = {
       ga4: {
         customDimensions: [{ name: "properties/1/customDimensions/2", parameterName: "feature_name", displayName: "Feature name", scope: "EVENT", description: "x" }],
-        customMetrics: [{ name: "properties/1/customMetrics/3", parameterName: "time_seconds", displayName: "Result time seconds", scope: "EVENT", unit: "SECONDS" }],
+        customMetrics: [{ name: "properties/1/customMetrics/3", parameterName: "time_seconds", displayName: "Result time seconds", scope: "EVENT", measurementUnit: "SECONDS" }],
         keyEvents: [{ name: "properties/1/keyEvents/4", eventName: "result_view" }],
       },
       gtm: {
@@ -18,17 +18,18 @@ describe("toCurrentState", () => {
             { type: "integer", key: "dataLayerVersion", value: "2" },
           ],
         }],
-        triggers: [{ name: "CE - userevent - pageview", type: "customEvent", customEventFilter: [
+        triggers: [{ name: "CE - userevent - pageview", triggerId: "17", type: "customEvent", customEventFilter: [
           { type: "EQUALS", parameter: [{ key: "arg0", value: "{{_event}}" }, { key: "arg1", value: "userevent" }] },
+        ], filter: [
           { type: "EQUALS", parameter: [{ key: "arg0", value: "{{DLV - event_type}}" }, { key: "arg1", value: "pageview" }] },
         ] }],
-        tags: [{ name: "GA4 - Page View", type: "gaawe", parameter: [
+        tags: [{ name: "GA4 - Page View", type: "gaawe", firingTriggerId: ["17"], parameter: [
           { key: "eventName", value: "page_view" },
-          { key: "measurementId", value: "G-XXXXXXX000" },
-          { key: "eventParameters", type: "list", list: [
+          { key: "measurementIdOverride", value: "G-XXXXXXX000" },
+          { key: "eventSettingsTable", type: "list", list: [
             { type: "map", map: [
-              { key: "name", value: "page_name" },
-              { key: "value", value: "{{DLV - userParams.page_name}}" },
+              { key: "parameter", value: "page_name" },
+              { key: "parameterValue", value: "{{DLV - userParams.page_name}}" },
             ] },
           ] },
         ] }],
@@ -48,7 +49,7 @@ describe("toCurrentState", () => {
       tagType: "ga4_event",
       measurementId: "G-XXXXXXX000",
       eventName: "page_view",
-      trigger: "",
+      trigger: "CE - userevent - pageview",
       params: { page_name: "{{DLV - userParams.page_name}}" },
     });
   });

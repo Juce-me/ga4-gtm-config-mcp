@@ -12,12 +12,29 @@ export async function listCustomMetrics(
   return res.data.customMetrics ?? [];
 }
 
-const CM_COMPARABLE = ["parameterName", "displayName", "scope", "unit", "description"] as const;
+const CM_COMPARABLE = ["parameterName", "displayName", "scope", "measurementUnit", "description"] as const;
+
+type CustomMetricPayload = {
+  parameterName: string;
+  displayName: string;
+  scope: "EVENT";
+  measurementUnit: string;
+  description?: string;
+};
+
+type ExistingCustomMetric = {
+  name?: string;
+  parameterName?: string;
+  displayName?: string;
+  scope?: string;
+  measurementUnit?: string;
+  description?: string;
+};
 
 export async function createCustomMetric(
   client: analyticsadmin_v1beta.Analyticsadmin,
   propertyId: string,
-  payload: { parameterName: string; displayName: string; scope: "EVENT"; unit: string; description?: string },
+  payload: CustomMetricPayload,
 ) {
   const res = await client.properties.customMetrics.create({ parent: propertyName(propertyId), requestBody: payload });
   return res.data;
@@ -28,7 +45,7 @@ export async function updateCustomMetric(
   name: string,
   payload: { displayName?: string; description?: string },
 ) {
-  // GA Admin v1beta: parameterName, scope, and unit cannot be updated after create.
+  // GA Admin v1beta: parameterName, scope, and measurementUnit cannot be updated after create.
   const res = await client.properties.customMetrics.patch({
     name,
     updateMask: Object.keys(payload).join(","),
@@ -40,8 +57,8 @@ export async function updateCustomMetric(
 export async function upsertCustomMetric(
   client: analyticsadmin_v1beta.Analyticsadmin,
   propertyId: string,
-  payload: { parameterName: string; displayName: string; scope: "EVENT"; unit: string; description?: string },
-  existing?: { name?: string; parameterName?: string; displayName?: string; scope?: string; unit?: string; description?: string },
+  payload: CustomMetricPayload,
+  existing?: ExistingCustomMetric,
 ): Promise<UpsertResult<unknown>> {
   if (!existing) {
     return { action: "create", entity: await createCustomMetric(client, propertyId, payload) };
@@ -51,8 +68,8 @@ export async function upsertCustomMetric(
   if (stableStringify(proj(existing as Record<string, unknown>)) === stableStringify(proj(payload as Record<string, unknown>))) {
     return { action: "unchanged", entity: existing };
   }
-  if (existing.parameterName !== payload.parameterName || existing.scope !== payload.scope || existing.unit !== payload.unit) {
-    throw new MCPError("API_UNSUPPORTED", `Cannot change parameterName, scope, or unit of existing CM "${existing.parameterName}"`);
+  if (existing.parameterName !== payload.parameterName || existing.scope !== payload.scope || existing.measurementUnit !== payload.measurementUnit) {
+    throw new MCPError("API_UNSUPPORTED", `Cannot change parameterName, scope, or measurementUnit of existing CM "${existing.parameterName}"`);
   }
   if (!existing.name) throw new MCPError("API_UNSUPPORTED", "existing CM missing resource name");
   return { action: "update", entity: await updateCustomMetric(client, existing.name, { displayName: payload.displayName, description: payload.description }) };

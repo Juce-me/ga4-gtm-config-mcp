@@ -47,7 +47,7 @@ export function desiredCustomMetricToGa4Payload(config: NormalizedGa4["customMet
     parameterName: config.parameter_name,
     displayName: config.display_name,
     scope: config.scope,
-    unit: config.unit,
+    measurementUnit: config.unit,
     ...(config.description !== undefined ? { description: config.description } : {}),
   };
 }
@@ -76,11 +76,22 @@ export function desiredTriggerToGtmPayload(t: NormalizedGtm["triggers"][number])
     ? [condition("equals", "{{_event}}", t.config.eventName)]
     : [];
 
-  return {
+  const payload: {
+    name: string;
+    type: string;
+    customEventFilter?: GtmCondition[];
+    filter?: GtmCondition[];
+  } = {
     name: t.name,
     type,
-    customEventFilter: [...eventFilter, ...filters],
   };
+  if (type === "customEvent") {
+    if (eventFilter.length > 0) payload.customEventFilter = eventFilter;
+    if (filters.length > 0) payload.filter = filters;
+    return payload;
+  }
+  if (filters.length > 0) payload.filter = filters;
+  return payload;
 }
 
 export function desiredTagToGtmPayload(tg: NormalizedGtm["tags"][number], triggerIdsByName: Map<string, string>) {
@@ -93,17 +104,17 @@ export function desiredTagToGtmPayload(tg: NormalizedGtm["tags"][number], trigge
     { type: "template", key: "eventName", value: tg.config.eventName },
   ];
   if (tg.config.measurementId) {
-    parameter.push({ type: "template", key: "measurementId", value: tg.config.measurementId });
+    parameter.push({ type: "template", key: "measurementIdOverride", value: tg.config.measurementId });
   }
   const eventParameters = Object.entries(tg.config.params).map(([k, v]) => ({
     type: "map",
     map: [
-      { type: "template", key: "name", value: k },
-      { type: "template", key: "value", value: v },
+      { type: "template", key: "parameter", value: k },
+      { type: "template", key: "parameterValue", value: v },
     ],
   }));
   if (eventParameters.length > 0) {
-    parameter.push({ type: "list", key: "eventParameters", list: eventParameters });
+    parameter.push({ type: "list", key: "eventSettingsTable", list: eventParameters });
   }
   return {
     name: tg.name,

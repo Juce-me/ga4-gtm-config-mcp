@@ -108,6 +108,8 @@ GOOGLE_APPLICATION_CREDENTIALS = "<credential-json-path>"
 # ALLOW_GOOGLE_IMPERSONATED_ADC = "1"
 ```
 
+Use absolute, shell-expanded paths for both `<repo-path>` and `<credential-json-path>` in MCP client config. Do not rely on `~`, `$HOME`, or a path relative to the application repo; MCP hosts may launch the server from a different working directory.
+
 After that, open Codex in the application repo that needs GA4/GTM configuration and use the generated `*.mcp-execution.yaml` from the `google-analytics-skill` setup as the tool `spec_path`. Do not add `GOOGLE_CLOUD_PROJECT`; this server does not use a quota-project env var for GA4/GTM configuration.
 
 ## 6.1 ID formats

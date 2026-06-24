@@ -76,7 +76,7 @@ export function toCurrentState(raw: {
             parameter_name: parameterName,
             display_name: str(cm["displayName"]),
             scope: str(cm["scope"]),
-            unit: str(cm["unit"]),
+            unit: str(cm["measurementUnit"] ?? cm["unit"]),
             ...(cm["description"] !== undefined ? { description: str(cm["description"]) } : {}),
           },
         };
@@ -93,6 +93,12 @@ export function toCurrentState(raw: {
       }),
     ),
   };
+
+  const triggerNameById = new Map(
+    raw.gtm.triggers
+      .map((t) => [str(t["triggerId"]), str(t["name"])] as const)
+      .filter(([id, name]) => id && name),
+  );
 
   const gtm = {
     builtInVariables: sortByName(
@@ -123,7 +129,7 @@ export function toCurrentState(raw: {
       raw.gtm.triggers.map((t) => normalizeGtmTrigger(t)),
     ),
     tags: sortByName(
-      raw.gtm.tags.map((tg) => normalizeGtmTag(tg)),
+      raw.gtm.tags.map((tg) => normalizeGtmTag(tg, triggerNameById)),
     ),
   };
 
@@ -140,11 +146,10 @@ export function toCurrentState(raw: {
 // If the shape doesn't match (e.g., no parameter array), we produce a best-effort
 // entry with empty strings so the diff at least sees the entity as present.
 function normalizeGtmTrigger(t: AnyObj): NormalizedGtm["triggers"][number] {
-  const rawFilters = (Array.isArray(t["customEventFilter"])
-    ? t["customEventFilter"]
-    : Array.isArray(t["filter"])
-      ? t["filter"]
-      : []) as AnyObj[];
+  const rawFilters = [
+    ...(Array.isArray(t["customEventFilter"]) ? t["customEventFilter"] as AnyObj[] : []),
+    ...(Array.isArray(t["filter"]) ? t["filter"] as AnyObj[] : []),
+  ];
 
   let eventName: string | undefined;
   const filters = rawFilters.flatMap((f) => {
@@ -175,15 +180,11 @@ function normalizeGtmTrigger(t: AnyObj): NormalizedGtm["triggers"][number] {
 // ─── Tag normalization ────────────────────────────────────────────────────────
 // GA4 event tags store their parameters in a flat `parameter` array.
 // We pull out eventName and measurementId by key, then collect the remainder
-// into `params`. The `firingTriggerIds` array contains numeric IDs; we do not
-// resolve them back to names here (that mapping lives in the apply orchestrator).
-// For normalization purposes, `trigger` is left empty — the diff will flag tags
-// as "update" if this field differs from desiredState (where trigger is a name).
-// This is an acceptable limitation at M5; full resolution is an M6 concern.
-function normalizeGtmTag(tg: AnyObj): NormalizedGtm["tags"][number] {
+// into `params`. Trigger IDs are resolved through the workspace trigger list.
+function normalizeGtmTag(tg: AnyObj, triggerNameById: Map<string, string>): NormalizedGtm["tags"][number] {
   const params = tg["parameter"] as AnyObj[] | undefined;
   const eventName = getParam(params, "eventName");
-  const measurementId = getParam(params, "measurementId");
+  const measurementId = getParam(params, "measurementIdOverride") || getParam(params, "measurementId");
 
   // Collect all other parameters into the params record, excluding secretValue
   const extraParams: Record<string, string> = {};
@@ -191,8 +192,8 @@ function normalizeGtmTag(tg: AnyObj): NormalizedGtm["tags"][number] {
     for (const p of params as AnyObj[]) {
       const k = str(p["key"]);
       const v = str(p["value"]);
-      if (k === "eventName" || k === "measurementId") continue;
-      if (k === "eventParameters") {
+      if (k === "eventName" || k === "measurementIdOverride" || k === "measurementId") continue;
+      if (k === "eventParameters" || k === "eventSettingsTable") {
         Object.assign(extraParams, getEventParameters(p));
         continue;
       }
@@ -209,7 +210,7 @@ function normalizeGtmTag(tg: AnyObj): NormalizedGtm["tags"][number] {
       tagType: API_TAG_TYPE_MAP[str(tg["type"])] ?? str(tg["type"]),
       ...(measurementId ? { measurementId } : {}),
       eventName,
-      trigger: "", // trigger ID → name resolution deferred to apply orchestrator (M6)
+      trigger: resolveFirstTriggerName(tg["firingTriggerId"], triggerNameById),
       params: extraParams,
     },
   };
@@ -221,13 +222,19 @@ function getEventParameters(parameter: AnyObj): Record<string, string> {
   for (const entry of parameter["list"] as AnyObj[]) {
     if (!Array.isArray(entry["map"])) continue;
     const map = entry["map"] as AnyObj[];
-    const name = getParam(map, "name");
-    const value = getParam(map, "value");
+    const name = getParam(map, "parameter") || getParam(map, "name");
+    const value = getParam(map, "parameterValue") || getParam(map, "value");
     if (name && name !== "secretValue" && !/secret/i.test(name)) {
       out[name] = value;
     }
   }
   return out;
+}
+
+function resolveFirstTriggerName(ids: unknown, triggerNameById: Map<string, string>): string {
+  if (!Array.isArray(ids)) return "";
+  const id = ids.find((value): value is string => typeof value === "string");
+  return id ? triggerNameById.get(id) ?? "" : "";
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

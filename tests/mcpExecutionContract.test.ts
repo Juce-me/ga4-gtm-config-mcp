@@ -79,7 +79,7 @@ describe("MCP execution contract", () => {
       parameterName: "time_seconds",
       displayName: "Result time seconds",
       scope: "EVENT",
-      unit: "STANDARD",
+      measurementUnit: "STANDARD",
     });
     expect(calls.find((c) => c.kind === "ga4_key_event" && c.name === "result_view")?.payload).toEqual({
       eventName: "result_view",
@@ -108,6 +108,8 @@ describe("MCP execution contract", () => {
             { type: "template", key: "arg1", value: "userevent" },
           ],
         },
+      ],
+      filter: [
         {
           type: "EQUALS",
           parameter: [

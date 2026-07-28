@@ -242,6 +242,7 @@ function waitForCallback(options: {
     let settled = false;
     let callbackConsumed = false;
     let activeGeneration = 0;
+    let commitPhaseClaimed = false;
 
     const beginShutdown = (forceActiveConnections: boolean) => {
       void options.listener.close().catch(() => {
@@ -266,6 +267,19 @@ function waitForCallback(options: {
       } else {
         reject(result.error);
       }
+    };
+
+    const claimCommitPhase = (callbackGeneration: number): boolean => {
+      if (
+        settled
+        || commitPhaseClaimed
+        || activeGeneration !== callbackGeneration
+      ) {
+        return false;
+      }
+      commitPhaseClaimed = true;
+      clearTimeout(timeout);
+      return true;
     };
 
     const rejectRequest = (
@@ -352,7 +366,7 @@ function waitForCallback(options: {
             tokenResponse.tokens.refresh_token,
           );
           const grantedScopes = parseGrantedScopes(tokenResponse.tokens.scope);
-          if (!callbackIsActive()) return;
+          if (!claimCommitPhase(callbackGeneration)) return;
           await writeStoredUserOAuthToken(options.tokenPath, {
             refresh_token: refreshToken,
             granted_scopes: grantedScopes,
@@ -382,6 +396,7 @@ function waitForCallback(options: {
     };
 
     const timeout = setTimeout(() => {
+      if (commitPhaseClaimed) return;
       activeGeneration++;
       beginShutdown(true);
       finish({ ok: false, error: loginFailure("login_timeout") });

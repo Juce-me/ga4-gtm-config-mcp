@@ -10,6 +10,20 @@ import { request } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+const { openAsyncMock } = vi.hoisted(() => ({
+  openAsyncMock: vi.fn(),
+}));
+
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs/promises")>();
+  openAsyncMock.mockImplementation(actual.open);
+  return {
+    ...actual,
+    open: openAsyncMock,
+  };
+});
+
 import { runLogin } from "../src/cli/login.js";
 
 const CLIENT_ID = "client-id-placeholder";
@@ -70,8 +84,13 @@ function deferred<T>(): {
   };
 }
 
-afterEach(() => {
+afterEach(async () => {
   vi.restoreAllMocks();
+  const actualFsPromises = await vi.importActual<typeof import("node:fs/promises")>(
+    "node:fs/promises",
+  );
+  openAsyncMock.mockReset();
+  openAsyncMock.mockImplementation(actualFsPromises.open);
   for (const directory of temporaryDirectories.splice(0)) {
     try {
       chmodSync(directory, 0o700);
@@ -583,6 +602,76 @@ describe("runLogin", () => {
       sendHttpRequest(callbackUrlFromAuthorizationUrl(authorizationUrl)),
     ).rejects.toThrow();
     expect(oauth.records.tokenExchanges).toHaveLength(1);
+  });
+
+  it("finishes persistence once commit phase starts before timeout", async () => {
+    const actualFsPromises = await vi.importActual<typeof import("node:fs/promises")>(
+      "node:fs/promises",
+    );
+    const persistenceStarted = deferred<void>();
+    const releasePersistence = deferred<void>();
+    openAsyncMock.mockImplementationOnce(async (...args: unknown[]) => {
+      persistenceStarted.resolve(undefined);
+      await releasePersistence.promise;
+      return actualFsPromises.open(
+        ...(args as Parameters<typeof actualFsPromises.open>),
+      );
+    });
+    const fixture = createFixture();
+    const oauth = createOAuthHarness();
+    let browserResponse: Promise<
+      | { status: "fulfilled"; value: HttpResponse }
+      | { status: "rejected"; error: unknown }
+    > | undefined;
+    const login = runLogin({
+      env: fixture.env,
+      dependencies: {
+        createOAuth2Client: oauth.createOAuth2Client,
+        onAuthorizationUrl(url) {
+          browserResponse = sendHttpRequest(callbackUrlFromAuthorizationUrl(url)).then(
+            (value) => ({ status: "fulfilled" as const, value }),
+            (error: unknown) => ({ status: "rejected" as const, error }),
+          );
+        },
+        now: () => new Date(OBTAINED_AT),
+        timeoutMs: 30,
+      },
+    });
+    let loginSettled = false;
+    const loginOutcome = login.then(
+      (value) => ({ status: "fulfilled" as const, value }),
+      (error: unknown) => ({ status: "rejected" as const, error }),
+    ).finally(() => {
+      loginSettled = true;
+    });
+
+    await persistenceStarted.promise;
+    await new Promise<void>((resolve) => setTimeout(resolve, 100));
+    const settledPastNominalTimeout = loginSettled;
+    releasePersistence.resolve(undefined);
+    const eventualOutcome = await loginOutcome;
+    const browserOutcome = browserResponse === undefined
+      ? undefined
+      : await browserResponse;
+
+    expect(settledPastNominalTimeout).toBe(false);
+    expect(eventualOutcome).toEqual({
+      status: "fulfilled",
+      value: {
+        tokenPath: fixture.tokenPath,
+        grantedScopes: [...REQUIRED_SCOPES],
+      },
+    });
+    expect(browserOutcome?.status).toBe("fulfilled");
+    if (browserOutcome?.status === "fulfilled") {
+      expectNoStoreResponse(browserOutcome.value, 200, SUCCESS_BODY);
+    }
+    expect(JSON.parse(readFileSync(fixture.tokenPath, "utf8"))).toEqual({
+      refresh_token: REFRESH_TOKEN,
+      granted_scopes: [...REQUIRED_SCOPES],
+      client_id: CLIENT_ID,
+      obtained_at: OBTAINED_AT,
+    });
   });
 
   it.each([

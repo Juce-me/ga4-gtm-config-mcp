@@ -4,13 +4,12 @@ import { join } from "node:path";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { buildAuth } from "../src/auth/googleAuth.js";
 import {
-  GA4_ACCESS_BOOTSTRAP_SCOPES,
-  GTM_ACCESS_BOOTSTRAP_SCOPES,
   READ_SCOPES,
   WRITE_WORKSPACE_SCOPES,
   VERSION_SCOPES,
   PUBLISH_SCOPES,
 } from "../src/auth/scopes.js";
+import * as scopes from "../src/auth/scopes.js";
 
 const tmpDirs: string[] = [];
 
@@ -62,15 +61,16 @@ describe("auth scopes", () => {
     expect(PUBLISH_SCOPES).toContain("https://www.googleapis.com/auth/tagmanager.publish");
   });
 
-  it("keeps user-management scopes out of normal runtime scope tiers", () => {
-    expect(GA4_ACCESS_BOOTSTRAP_SCOPES).toEqual(["https://www.googleapis.com/auth/analytics.manage.users"]);
-    expect(GTM_ACCESS_BOOTSTRAP_SCOPES).toEqual(["https://www.googleapis.com/auth/tagmanager.manage.users"]);
+  it("ALL_LOGIN_SCOPES combines every operational scope without user-management grants", () => {
+    const allLoginScopes = (scopes as Record<string, readonly string[]>).ALL_LOGIN_SCOPES ?? [];
 
-    const runtimeScopes = [READ_SCOPES, WRITE_WORKSPACE_SCOPES, VERSION_SCOPES, PUBLISH_SCOPES];
-    for (const scopes of runtimeScopes) {
-      expect(scopes).not.toContain(GA4_ACCESS_BOOTSTRAP_SCOPES[0]);
-      expect(scopes).not.toContain(GTM_ACCESS_BOOTSTRAP_SCOPES[0]);
+    for (const scopeSet of [READ_SCOPES, WRITE_WORKSPACE_SCOPES, VERSION_SCOPES, PUBLISH_SCOPES]) {
+      for (const scope of scopeSet) expect(allLoginScopes).toContain(scope);
     }
+
+    expect(new Set(allLoginScopes).size).toBe(allLoginScopes.length);
+    expect(allLoginScopes).not.toContain("https://www.googleapis.com/auth/analytics.manage.users");
+    expect(allLoginScopes).not.toContain("https://www.googleapis.com/auth/tagmanager.manage.users");
   });
 });
 

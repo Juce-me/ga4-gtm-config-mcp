@@ -1,5 +1,12 @@
-import { closeSync, constants, fstatSync, openSync, readFileSync } from "node:fs";
-import { chmod, lstat, mkdir, open, rename, unlink, type FileHandle } from "node:fs/promises";
+import {
+  closeSync,
+  constants,
+  fstatSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+} from "node:fs";
+import { lstat, open, rename, unlink, type FileHandle } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { dirname, isAbsolute, join } from "node:path";
 import { google } from "googleapis";
@@ -167,6 +174,32 @@ function isMissingFileError(error: unknown): boolean {
   return isRecord(error) && error.code === "ENOENT";
 }
 
+async function enforcePrivateDirectoryMode(directory: string): Promise<void> {
+  let handle: FileHandle | undefined;
+  try {
+    handle = await open(
+      directory,
+      constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_DIRECTORY,
+    );
+    await handle.chmod(0o700);
+    const status = await handle.stat();
+    if (!status.isDirectory() || (status.mode & 0o777) !== 0o700) {
+      permissionDenied("token_parent_verification_failed");
+    }
+  } catch (error) {
+    if (error instanceof MCPError) throw error;
+    permissionDenied("token_parent_unavailable");
+  } finally {
+    if (handle) {
+      try {
+        await handle.close();
+      } catch {
+        permissionDenied("token_parent_unavailable");
+      }
+    }
+  }
+}
+
 async function ensurePrivateParent(parent: string): Promise<void> {
   const missingDirectories: string[] = [];
   let cursor = parent;
@@ -187,15 +220,25 @@ async function ensurePrivateParent(parent: string): Promise<void> {
   }
 
   for (const directory of missingDirectories) {
+    let created = false;
+    let creationError: unknown;
+    const previousUmask = process.umask(0);
     try {
-      await mkdir(directory, { mode: 0o700 });
+      mkdirSync(directory, { mode: 0o700 });
+      created = true;
     } catch (error) {
-      if (!isRecord(error) || error.code !== "EEXIST") throw error;
+      creationError = error;
+    } finally {
+      process.umask(previousUmask);
+    }
+    if (creationError) {
+      if (!isRecord(creationError) || creationError.code !== "EEXIST") {
+        throw creationError;
+      }
       const status = await lstat(directory);
       if (!status.isDirectory()) permissionDenied("token_parent_not_directory");
-      continue;
     }
-    await chmod(directory, 0o700);
+    if (created) await enforcePrivateDirectoryMode(directory);
   }
 }
 

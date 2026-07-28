@@ -14,7 +14,14 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { openAsyncMock, openSyncMock, readFileSyncMock, renameMock } = vi.hoisted(() => ({
+const {
+  chmodAsyncMock,
+  openAsyncMock,
+  openSyncMock,
+  readFileSyncMock,
+  renameMock,
+} = vi.hoisted(() => ({
+  chmodAsyncMock: vi.fn(),
   openAsyncMock: vi.fn(),
   openSyncMock: vi.fn(),
   readFileSyncMock: vi.fn(),
@@ -34,9 +41,15 @@ vi.mock("node:fs", async (importOriginal) => {
 
 vi.mock("node:fs/promises", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:fs/promises")>();
+  chmodAsyncMock.mockImplementation(actual.chmod);
   openAsyncMock.mockImplementation(actual.open);
   renameMock.mockImplementation(actual.rename);
-  return { ...actual, open: openAsyncMock, rename: renameMock };
+  return {
+    ...actual,
+    chmod: chmodAsyncMock,
+    open: openAsyncMock,
+    rename: renameMock,
+  };
 });
 
 import {
@@ -534,9 +547,43 @@ describe("writeStoredUserOAuthToken", () => {
     expect(error).toMatchObject({ details: { reason: "token_destination_not_regular" } });
     expect(renameMock).not.toHaveBeenCalled();
   });
+
+  it("does not chmod a replacement target when a created parent is swapped", async () => {
+    const actualFsPromises = await vi.importActual<typeof import("node:fs/promises")>(
+      "node:fs/promises",
+    );
+    const root = makeTempDir();
+    const replacementTarget = makeTempDir();
+    const parent = join(root, "oauth");
+    const tokenPath = join(parent, "token.json");
+    chmodSync(replacementTarget, 0o755);
+    let swapped = false;
+    const swapParent = () => {
+      if (swapped) return;
+      rmSync(parent, { recursive: true, force: true });
+      symlinkSync(replacementTarget, parent);
+      swapped = true;
+    };
+    chmodAsyncMock.mockImplementationOnce(async (path, mode) => {
+      if (String(path) === parent) swapParent();
+      await actualFsPromises.chmod(path, mode);
+    });
+    openAsyncMock.mockImplementationOnce(async (path, flags, mode) => {
+      if (String(path) === parent) swapParent();
+      return actualFsPromises.open(path, flags, mode);
+    });
+
+    await captureAsyncPermissionDenied(() => writeStoredUserOAuthToken(tokenPath, storedToken()));
+
+    expect(swapped).toBe(true);
+    expect(lstatSync(parent).isSymbolicLink()).toBe(true);
+    expect(statSync(replacementTarget).mode & 0o777).toBe(0o755);
+    expect(readdirSync(replacementTarget)).toEqual([]);
+  });
 });
 
 afterEach(() => {
+  chmodAsyncMock.mockClear();
   openAsyncMock.mockClear();
   openSyncMock.mockClear();
   readFileSyncMock.mockClear();

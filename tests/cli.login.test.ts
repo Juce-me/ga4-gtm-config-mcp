@@ -48,10 +48,27 @@ type TokenResponse = {
 type OAuthHarnessOptions = {
   tokenResponse?: TokenResponse;
   tokenError?: unknown;
+  tokenResponsePromise?: Promise<TokenResponse>;
   codeChallenge?: string;
 };
 
 const temporaryDirectories: string[] = [];
+
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve(value: T): void;
+} {
+  let resolvePromise: ((value: T) => void) | undefined;
+  const promise = new Promise<T>((resolve) => {
+    resolvePromise = resolve;
+  });
+  return {
+    promise,
+    resolve(value) {
+      resolvePromise?.(value);
+    },
+  };
+}
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -92,6 +109,10 @@ function createFixture(): {
 }
 
 function createOAuthHarness(options: OAuthHarnessOptions = {}) {
+  let markExchangeStarted: (() => void) | undefined;
+  const exchangeStarted = new Promise<void>((resolve) => {
+    markExchangeStarted = resolve;
+  });
   const records: {
     createdWith: Array<{
       client: { clientId: string; clientSecret: string };
@@ -111,6 +132,7 @@ function createOAuthHarness(options: OAuthHarnessOptions = {}) {
 
   return {
     records,
+    exchangeStarted,
     createOAuth2Client(
       client: { clientId: string; clientSecret: string },
       redirectUri: string,
@@ -140,7 +162,11 @@ function createOAuthHarness(options: OAuthHarnessOptions = {}) {
           redirect_uri: string;
         }): Promise<TokenResponse> {
           records.tokenExchanges.push(exchange);
+          markExchangeStarted?.();
           if (options.tokenError !== undefined) throw options.tokenError;
+          if (options.tokenResponsePromise !== undefined) {
+            return options.tokenResponsePromise;
+          }
           return options.tokenResponse ?? {
             tokens: {
               refresh_token: REFRESH_TOKEN,
@@ -482,6 +508,81 @@ describe("runLogin", () => {
     await expect(sendHttpRequest(callbackUrlFromAuthorizationUrl(authorizationUrl))).rejects
       .toThrow();
     expect(oauth.records.tokenExchanges).toEqual([]);
+  });
+
+  it("invalidates a delayed exchange at timeout without replacing the existing token", async () => {
+    const fixture = createFixture();
+    const delayedTokenResponse = deferred<TokenResponse>();
+    const oauth = createOAuthHarness({
+      tokenResponsePromise: delayedTokenResponse.promise,
+    });
+    const originalToken = `${JSON.stringify({
+      refresh_token: "existing-refresh-token-placeholder",
+      granted_scopes: [...REQUIRED_SCOPES],
+      client_id: CLIENT_ID,
+      obtained_at: "2026-01-02T03:04:05.000Z",
+    })}\n`;
+    writeFileSync(fixture.tokenPath, originalToken, {
+      encoding: "utf8",
+      mode: 0o600,
+    });
+    let authorizationUrl = "";
+    let browserResponse: Promise<HttpResponse> | undefined;
+    const login = runLogin({
+      env: fixture.env,
+      dependencies: {
+        createOAuth2Client: oauth.createOAuth2Client,
+        onAuthorizationUrl(url) {
+          authorizationUrl = url;
+          browserResponse = sendHttpRequest(callbackUrlFromAuthorizationUrl(url));
+        },
+        now: () => new Date(OBTAINED_AT),
+        timeoutMs: 30,
+      },
+    });
+    const loginOutcome = login.then(
+      (value) => ({ status: "fulfilled" as const, value }),
+      (error: unknown) => ({ status: "rejected" as const, error }),
+    );
+
+    await oauth.exchangeStarted;
+    const promptOutcome = await Promise.race([
+      loginOutcome,
+      new Promise<{ status: "still_pending" }>((resolve) => {
+        setTimeout(() => resolve({ status: "still_pending" }), 250);
+      }),
+    ]);
+    delayedTokenResponse.resolve({
+      tokens: {
+        refresh_token: REFRESH_TOKEN,
+        scope: REQUIRED_SCOPES.join(" "),
+      },
+    });
+    const eventualOutcome = await loginOutcome;
+    const browserOutcome = browserResponse === undefined
+      ? undefined
+      : await Promise.allSettled([browserResponse]).then(([result]) => result);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    expect(promptOutcome).toMatchObject({
+      status: "rejected",
+      error: { code: "PERMISSION_DENIED" },
+    });
+    expect(eventualOutcome).toMatchObject({
+      status: "rejected",
+      error: { code: "PERMISSION_DENIED" },
+    });
+    if (browserOutcome?.status === "fulfilled") {
+      expect(browserOutcome.value.statusCode).not.toBe(200);
+      expect(browserOutcome.value.body).not.toBe(SUCCESS_BODY);
+    } else {
+      expect(browserOutcome?.status).toBe("rejected");
+    }
+    expect(readFileSync(fixture.tokenPath, "utf8")).toBe(originalToken);
+    await expect(
+      sendHttpRequest(callbackUrlFromAuthorizationUrl(authorizationUrl)),
+    ).rejects.toThrow();
+    expect(oauth.records.tokenExchanges).toHaveLength(1);
   });
 
   it.each([

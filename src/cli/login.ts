@@ -241,6 +241,16 @@ function waitForCallback(options: {
   return new Promise((resolve, reject) => {
     let settled = false;
     let callbackConsumed = false;
+    let activeGeneration = 0;
+
+    const beginShutdown = (forceActiveConnections: boolean) => {
+      void options.listener.close().catch(() => {
+        // The outer lifecycle awaits and translates listener-close failures.
+      });
+      if (forceActiveConnections) {
+        options.listener.server.closeAllConnections();
+      }
+    };
 
     const finish = (
       result:
@@ -268,6 +278,8 @@ function waitForCallback(options: {
     };
 
     const onServerError = () => {
+      activeGeneration++;
+      beginShutdown(true);
       finish({ ok: false, error: loginFailure("listener_failed") });
     };
 
@@ -317,7 +329,10 @@ function waitForCallback(options: {
         }
 
         callbackConsumed = true;
-        void options.listener.close();
+        const callbackGeneration = ++activeGeneration;
+        const callbackIsActive = () =>
+          !settled && activeGeneration === callbackGeneration;
+        beginShutdown(false);
 
         try {
           let tokenResponse: Awaited<ReturnType<OAuth2ClientBoundary["getToken"]>>;
@@ -328,19 +343,23 @@ function waitForCallback(options: {
               redirect_uri: options.listener.redirectUri,
             });
           } catch {
+            if (!callbackIsActive()) return;
             throw loginFailure("token_exchange_failed");
           }
 
+          if (!callbackIsActive()) return;
           const refreshToken = requireRefreshToken(
             tokenResponse.tokens.refresh_token,
           );
           const grantedScopes = parseGrantedScopes(tokenResponse.tokens.scope);
+          if (!callbackIsActive()) return;
           await writeStoredUserOAuthToken(options.tokenPath, {
             refresh_token: refreshToken,
             granted_scopes: grantedScopes,
             client_id: options.clientId,
             obtained_at: options.now().toISOString(),
           });
+          if (!callbackIsActive()) return;
           sendBrowserResponse(response, 200, SUCCESS_BODY);
           finish({
             ok: true,
@@ -350,6 +369,7 @@ function waitForCallback(options: {
             },
           });
         } catch (error) {
+          if (!callbackIsActive()) return;
           sendBrowserResponse(response, 400, FAILURE_BODY);
           finish({
             ok: false,
@@ -362,6 +382,8 @@ function waitForCallback(options: {
     };
 
     const timeout = setTimeout(() => {
+      activeGeneration++;
+      beginShutdown(true);
       finish({ ok: false, error: loginFailure("login_timeout") });
     }, options.timeoutMs);
 

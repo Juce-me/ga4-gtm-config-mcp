@@ -6,6 +6,8 @@ Author: minired-panda
 
 > **Status note (2026-05-28):** ALL milestones M0–M8 have shipped on branch `feat/m0-m3-validator-slice`. Slices 1–5 (M0–M7) are recorded in the §Slice outcome sections near the end of this file; M8 (examples, `.env.example`, README, this rename + outcome, AGENTS.md §10 refresh) is recorded in the §Outcome and §Current Accuracy sections at the very end. Final verification: `npm run typecheck`, `npm run build`, and `npm test` (123/123) all green; the built server boots with 12 tools. This artifact is now historical — shipped code, tests, and `README.md` are the source of truth.
 
+> **Supersession note (2026-07-28):** Authentication and setup portions that describe workload credentials were later replaced by local user OAuth; current code, `README.md`, and `docs/setup/` are authoritative.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Implement a TypeScript MCP server that consumes an approved `*.mcp-execution.yaml` spec from `google-analytics-implementation-planner`, reads current GA4/GTM state, produces a deterministic diff, applies approved changes safely into a non-live GTM workspace, and hard-blocks both container-version creation and publishing unless explicitly approved.
@@ -2624,7 +2626,7 @@ The result differs from the plan's M8 sketch in three honest ways, each to keep 
 
 ## Current Accuracy
 
-**Accurate as of 2026-05-28.** Shipped code, tests, and `README.md` are now the source of truth; this artifact is historical context.
+**Partially accurate historical context.** Authentication and setup details that describe workload credentials, service accounts, or unsupported user refresh-token OAuth were superseded on 2026-07-28 by the local user-OAuth implementation. Current code, `README.md`, and `docs/setup/` are authoritative for authentication; the non-authentication server architecture and milestone record below remain historical context.
 
 - The §Milestones, §File Structure, §Error Codes, and §Audit Log sections describe what shipped and remain accurate, with these noted refinements captured in the slice outcomes: `Tag.type` is a free `z.string()`, the MP-secret `action` accepts the planner's `manual_create_or_mcp_create_placeholder` literal, TypeScript is pinned to 5.9.3, and the two synthetic-input gate fixtures were tested inline rather than as YAML files.
 - `AGENTS.md` §10 previously stated `googleapis` was "intentionally NOT a dependency" and listed only four `src/` subdirs — both were left over from the M0–M3 slice and are now corrected (`googleapis@172.0.0` is a listed core dep; all eight subdirs are listed).

@@ -20,7 +20,7 @@ A custom [Model Context Protocol](https://modelcontextprotocol.io) server for **
 - Expose raw API mutation tools (no `run_google_api_method`, no `create_tag(raw_json)`).
 - Modify the live/default GTM workspace.
 - Publish, create container versions, modify consent, or perform destructive changes by default — each is hard-gated.
-- Store, log, echo, or write secret values (OAuth tokens, refresh tokens, Measurement Protocol secrets, client secrets) anywhere, including audit logs and tool output.
+- Put secret values in specs, audit logs, or tool output. The local login necessarily stores one refresh token in the private file configured by `GOOGLE_OAUTH_TOKEN_PATH`.
 
 ## 2. Relationship to `google-analytics-implementation-planner`
 
@@ -47,23 +47,26 @@ npm run typecheck
 
 ## 4. Setup and authorization
 
-Start with [Setup overview](docs/setup/README.md). It defines every identity and credential involved, then links to the focused runbooks:
+Start with [Setup overview](docs/setup/README.md), then follow:
 
-- [Google Cloud credentials](docs/setup/google-cloud-credentials.md): where to create the Google Cloud project resources, which APIs to enable, what a service account is, and when to use Workload Identity Federation or explicitly enabled impersonated ADC instead of a JSON key.
-- [Product access bootstrap](docs/setup/product-access-bootstrap.md): how a human GA4/GTM admin creates a one-time OAuth access token and grants GA4/GTM access to the service account through official APIs.
-- [MCP client configuration](docs/setup/mcp-client-configuration.md): how Claude Desktop, Claude Code, Codex, or another MCP host launches this server and passes `GOOGLE_APPLICATION_CREDENTIALS`.
-- [Application project integration](docs/setup/application-project-integration.md): what other application repos should provide, and what they must not store.
+- [Google Cloud OAuth setup](docs/setup/google-cloud-credentials.md): enable the GA4/GTM APIs, choose the OAuth audience and publishing status, and create a Desktop client.
+- [User OAuth login](docs/setup/user-oauth-login.md): configure absolute paths, run `npm run login`, understand token storage and all-scope consent, and recover from revocation or `invalid_grant`.
+- [MCP client configuration](docs/setup/mcp-client-configuration.md): launch the stdio server with the same private absolute paths.
+- [Application project integration](docs/setup/application-project-integration.md): keep credentials separate from application repos and hand off a reviewed spec.
 
 The short version:
 
-1. The MCP runtime uses only workload credentials: service-account JSON, external-account/WIF JSON, explicitly enabled impersonated ADC, or explicit metadata-server credentials.
-2. The runtime rejects local plain `authorized_user` ADC files; a human refresh token must not operate the MCP server.
-3. A human GA4/GTM admin is used only once to bootstrap product access with `analytics.manage.users` and `tagmanager.manage.users`.
-4. `npm run bootstrap:access` grants the service account GA4 `predefinedRoles/editor` and GTM container `edit` by default.
-5. `GOOGLE_APPLICATION_CREDENTIALS` only tells Google Auth which workload credential to use; it does not grant GA4/GTM product access by itself.
-6. The MCP client `env` block, not this repo's `.env` file, is the normal place to pass runtime auth variables.
-7. Do not set `GOOGLE_CLOUD_PROJECT` for this MCP server. The code does not read it; GA4/GTM targets come from the spec and tool arguments.
-8. `INCLUDE_PUBLISH_SCOPE` stays unset unless publishing through this MCP server is explicitly approved.
+1. The operator's Google user must already have the intended permissions in each target GA4 property and GTM account/container. OAuth does not grant product access.
+2. In a Google Cloud project, enable the Google Analytics Admin API and Tag Manager API, then create an OAuth client with application type **Desktop app**.
+3. Set `GOOGLE_OAUTH_CLIENT_SECRETS` and `GOOGLE_OAUTH_TOKEN_PATH` to private absolute paths.
+4. Run `npm run login` and complete browser consent. The command requests the full read/write/version/publish scope set and stores a plaintext refresh token with file mode `0600`.
+5. Configure the MCP client with the same two absolute paths. Do not rely on `.env` auto-loading, `~`, `$HOME`, or relative paths.
+6. Leave `INCLUDE_PUBLISH_SCOPE` unset unless publishing is approved. It gates runtime publish mode; it does not change the scopes requested during login.
+
+For a durable one-time local login, the OAuth app must be eligible for **Internal** use or an **External** app must be configured for **In production**. External apps in Testing require test users for these non-basic scopes, and their refresh tokens expire after seven days. Verification requirements, warning screens, and user caps depend on the audience and requested scopes; follow Google's current policy:
+
+- [OAuth overview and refresh-token expiration](https://developers.google.com/identity/protocols/oauth2)
+- [OAuth app audience and seven-day Testing behavior](https://support.google.com/cloud/answer/15549945)
 
 ## 5. Local run
 
@@ -77,40 +80,39 @@ The server speaks MCP over **stdio**. `stdout` is reserved for the transport; al
 
 ## 6. MCP client configuration example
 
-For Claude Desktop (`claude_desktop_config.json`) or Claude Code (`.mcp.json`):
+For a JSON-based MCP host:
 
 ```json
 {
   "mcpServers": {
     "ga4-gtm-config": {
-      "command": "node",
-      "args": ["<repo-path>/dist/server.js"],
+      "command": "/absolute/path/to/node",
+      "args": ["/absolute/path/to/ga4-gtm-config-mcp/dist/server.js"],
       "env": {
-        "GOOGLE_APPLICATION_CREDENTIALS": "<credential-json-path>"
+        "GOOGLE_OAUTH_CLIENT_SECRETS": "/absolute/path/to/private/google-oauth-client.json",
+        "GOOGLE_OAUTH_TOKEN_PATH": "/absolute/path/to/private/google-oauth-token.json"
       }
     }
   }
 }
 ```
 
-For impersonated ADC, also add `"ALLOW_GOOGLE_IMPERSONATED_ADC": "1"` and use an ADC file with top-level `"type": "impersonated_service_account"`. Add `"INCLUDE_PUBLISH_SCOPE": "1"` to the `env` block only if and when you have explicitly decided to allow publishing.
+Add `"INCLUDE_PUBLISH_SCOPE": "1"` to the `env` block only after publishing is explicitly approved. Login already acquired the publish scope; this setting gates the operation and does not bypass the remaining publish guards.
 
-For Codex local setup, add this to `~/.codex/config.toml` after `npm run build`. The `args` path must point to this MCP server repo, not the application repo that contains the `google-analytics-skill` output:
+For Codex local setup, add a private configuration after `npm run build`:
 
 ```toml
 [mcp_servers.ga4-gtm-config]
-command = "node"
-args = ["<repo-path>/dist/server.js"]
+command = "/absolute/path/to/node"
+args = ["/absolute/path/to/ga4-gtm-config-mcp/dist/server.js"]
 
 [mcp_servers.ga4-gtm-config.env]
-GOOGLE_APPLICATION_CREDENTIALS = "<credential-json-path>"
-# Required only when the credential JSON has top-level type = "impersonated_service_account".
-# ALLOW_GOOGLE_IMPERSONATED_ADC = "1"
+GOOGLE_OAUTH_CLIENT_SECRETS = "/absolute/path/to/private/google-oauth-client.json"
+GOOGLE_OAUTH_TOKEN_PATH = "/absolute/path/to/private/google-oauth-token.json"
+# INCLUDE_PUBLISH_SCOPE = "1"
 ```
 
-Use absolute, shell-expanded paths for both `<repo-path>` and `<credential-json-path>` in MCP client config. Do not rely on `~`, `$HOME`, or a path relative to the application repo; MCP hosts may launch the server from a different working directory.
-
-After that, open Codex in the application repo that needs GA4/GTM configuration and use the generated `*.mcp-execution.yaml` from the `google-analytics-skill` setup as the tool `spec_path`. Do not add `GOOGLE_CLOUD_PROJECT`; this server does not use a quota-project env var for GA4/GTM configuration.
+After that, open the MCP host in the application repo that needs GA4/GTM configuration and use its reviewed `*.mcp-execution.yaml` as `spec_path`.
 
 ## 6.1 ID formats
 
@@ -169,7 +171,8 @@ Each guard is a pure, unit-tested function; the apply/gated tools layer them def
 
 ## 9. Known limitations
 
-- **Runtime OAuth refresh-token auth is deliberately unsupported** — use the one-time bootstrap CLI to grant product access, then run the MCP as a service account or workload identity.
+- **Local OAuth tokens are plaintext** — the token file is restricted to mode `0600` but is not encrypted. Protect it as a credential and use `npm run login` to replace it after revocation or refresh failure.
+- **Login requests all runtime scopes** — the stored grant includes read, write, version, and publish scopes. `INCLUDE_PUBLISH_SCOPE` is an operation gate, not a narrower consent mode.
 - **GA Admin archive operations are unsupported** — archiving custom dimensions/metrics/key events returns `API_UNSUPPORTED`; no `archive*` functions are exported. Upserts that would change immutable fields (`parameterName`, `scope`) also throw `API_UNSUPPORTED` rather than failing mid-call.
 - **Measurement Protocol secrets** — listing returns names/display names only; secret values are stripped at the wrapper boundary and never echoed.
 - **GTM 3-workspace-per-container cap** — `create_gtm_workspace` blocks with `WORKSPACE_CAPACITY_BLOCKED` when full; an existing workspace must be merged or deleted first.
@@ -178,6 +181,9 @@ Each guard is a pure, unit-tested function; the apply/gated tools layer them def
 ## 10. Troubleshooting
 
 - **`SPEC_INVALID` on a spec you believe is valid** — run `validate_mcp_execution_spec` and read the `errors` array; it names the exact path and reason (UA field, secret-shaped key, high-card dimension, per-event-tag explosion, consent change, or missing target ID outside dry-run).
+- **OAuth configuration or token validation failed** — confirm both OAuth variables contain absolute paths to regular JSON files and that the token was created for the configured Desktop client; then run `npm run login`.
+- **OAuth authorization expired, was revoked, or returned `invalid_grant`** — run `npm run login`, complete consent again, and restart the MCP host. See [login recovery](docs/setup/user-oauth-login.md#recovery).
+- **A GA4/GTM API returns `PERMISSION_DENIED` with a valid token** — the operator's user lacks the required product permission. OAuth scopes do not add GA4/GTM roles.
 - **`PERMISSION_DENIED` mentioning `INCLUDE_PUBLISH_SCOPE`** — you requested a publish-scoped operation without `INCLUDE_PUBLISH_SCOPE=1`. This is intentional; set it only if you mean to allow publishing.
 - **`VERSION_CREATION_BLOCKED` / `PUBLISH_BLOCKED`** — the response lists every unmet condition. Resolve all of them (spec flag, approval token, report paths, environment) — there is no single override.
 - **`WORKSPACE_UNSAFE`** — you targeted `workspaceId: "0"` or the default workspace. Create or target a dedicated non-live workspace.

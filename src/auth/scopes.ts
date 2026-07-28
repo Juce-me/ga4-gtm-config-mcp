@@ -19,10 +19,9 @@ export const PUBLISH_SCOPES = [
   "https://www.googleapis.com/auth/tagmanager.publish",
 ] as const;
 
-export const GA4_ACCESS_BOOTSTRAP_SCOPES = [
-  "https://www.googleapis.com/auth/analytics.manage.users",
-] as const;
-
-export const GTM_ACCESS_BOOTSTRAP_SCOPES = [
-  "https://www.googleapis.com/auth/tagmanager.manage.users",
-] as const;
+export const ALL_LOGIN_SCOPES = Array.from(new Set([
+  ...READ_SCOPES,
+  ...WRITE_WORKSPACE_SCOPES,
+  ...VERSION_SCOPES,
+  ...PUBLISH_SCOPES,
+]));

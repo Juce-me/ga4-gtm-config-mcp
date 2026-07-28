@@ -1,9 +1,86 @@
 # Replace workload credentials with user OAuth
 
-Status: planned
+Status: executed
 Review: approved
 Type: feature
 Author: a.feygin
+
+## Outcome
+
+Implemented with changes. The implementation and automated acceptance are complete, but
+credentialed manual acceptance was not performed. Shipped code and current product
+documentation are now the source of truth.
+
+Fresh automated verification on 2026-07-28 produced these results:
+
+- `npm run typecheck`: exited `0`.
+- `npm run build`: exited `0`.
+- `npm test`: exited `0`; 38 test files and 222 tests passed.
+- The focused safety and server-contract run exited `0`; 46 tests across the nine
+  `src/safety/` areas passed, and the server bootstrap test confirmed the exact 12-tool
+  catalog and safe metadata (47 tests total across 10 files).
+- `git diff --check`: exited `0`.
+- The pre-artifact `git status --short` produced no output. The implementation diff from
+  the approved-plan base was confined to files listed under **Files allowed to touch**;
+  protected `src/tools/`, `src/ga4/`, `src/gtm/`, `src/planner/`, `src/spec/`, and
+  `src/safety/` paths were unchanged.
+- `ALL_LOGIN_SCOPES` was evaluated from the built output as the six-element unique union of
+  all four runtime scope arrays; both `tagmanager.edit.containerversions` and
+  `tagmanager.publish` were present.
+- The removed credential-source/bootstrap modules, tests, and `bootstrap:access` script
+  were absent. Canonical workload/bootstrap scans returned no matches.
+- `.secrets/`, `dist/`, and `.env` contained no tracked files and remained ignored.
+  Tracked-filename and tracked-content scans found no private OAuth client/token file or
+  credential-shaped value. Placeholder-only examples and test values remain intentional.
+- All 16 relative Markdown links and anchors in `README.md` and `docs/setup/` resolved.
+
+Manual OAuth login, private GA4/GTM reads, and local MCP registration were **not
+performed — pending operator acceptance with private local values**. No live write or
+publish was performed. The token file's real mode, stored key names, client-ID equality,
+timestamp, and granted scopes therefore were not manually inspected.
+
+The implementation materially diverged from the first-pass mechanics in three hardening
+rounds:
+
+- Descriptor-safe token I/O added no-follow regular-file reads, exclusive temporary-file
+  creation, explicit file and newly-created-directory mode verification, synchronized
+  atomic replacement, failure cleanup, and preservation of an existing token.
+- Timeout invalidation prevents a callback or token exchange that finishes after the
+  five-minute deadline from persisting credentials.
+- Commit linearization lets only one valid callback claim the persistence phase and
+  prevents the timeout and callback paths from racing the final token replacement.
+
+Task 6 reviewed every changed canonical setup document against all four
+`docs/AGENTS.md` dimensions: UI/UX wording and flow, backend/API correctness,
+security/privacy, and architecture/contracts. The review found the implemented contracts
+and current guidance aligned. Accessibility-specific UI wording, HTTP status/rate-limit
+documentation, and distributed-service contracts were not applicable to these local,
+text-only setup documents. The repository still has no documented vulnerability/incident
+contact; none was invented as part of this feature.
+
+## Current Accuracy
+
+Current for the shipped implementation, canonical setup documentation, and fresh automated
+verification above. The architecture, fixed decisions, security behavior, changed-file
+inventory, expected behavior, and automated acceptance criteria remain accurate, subject to
+the descriptor-safe I/O, timeout-invalidation, and commit-linearization hardening summarized
+in **Outcome**.
+
+Credentialed behavior is not yet operator-accepted. An eligible Internal or In-production
+External consent screen, a private Desktop OAuth client, and private GA4/GTM resources are
+required to complete the remaining local checks:
+
+1. Set private absolute `GOOGLE_OAUTH_CLIENT_SECRETS` and `GOOGLE_OAUTH_TOKEN_PATH` values.
+2. Run `npm run login`, complete consent, and inspect only the allowed token metadata and
+   mode `0600` without printing the refresh token.
+3. Confirm the granted scope set equals `ALL_LOGIN_SCOPES`.
+4. With `INCLUDE_PUBLISH_SCOPE` unset, confirm publish mode fails locally before a Google
+   request.
+5. Through the MCP client, read one authorized private GA4 property and one authorized
+   private GTM container.
+6. Verify operator-local registration with `claude mcp get ga4-gtm-config`.
+
+These operator steps must not include a live write or publish.
 
 > **Execution requirement:** Implement the tasks in order, keep each checkpoint green,
 > and stop if the implementation needs a file or contract outside the allowed scope.
@@ -763,7 +840,7 @@ touching it.
 
 **Automated verification**
 
-- [ ] Run:
+- [x] Run:
 
   ```bash
   npm run typecheck
@@ -773,10 +850,10 @@ touching it.
   git status --short
   ```
 
-- [ ] Confirm the full suite is green and the only changed files are in this plan.
-- [ ] Confirm `.secrets/`, `dist/`, `.env`, client secrets, and the token file are not
+- [x] Confirm the full suite is green and the only changed files are in this plan.
+- [x] Confirm `.secrets/`, `dist/`, `.env`, client secrets, and the token file are not
       tracked.
-- [ ] Confirm all 12 tools and every safety guard test remain green.
+- [x] Confirm all 12 tools and every safety guard test remain green.
 
 **Manual OAuth verification**
 
@@ -797,7 +874,7 @@ Use private local values only; do not add them to the repository.
 - [ ] Through the MCP client, read one private placeholder property
       `properties/<GA4_PROPERTY_ID>` and one private placeholder GTM container under
       `accounts/<GTM_ACCOUNT_ID>/containers/<GTM_CONTAINER_ID>`.
-- [ ] Do not perform a live write or publish as part of acceptance.
+- [x] Do not perform a live write or publish as part of acceptance.
 - [ ] Verify the local registration separately with:
 
   ```bash
@@ -808,12 +885,12 @@ Use private local values only; do not add them to the repository.
 
 **Artifact completion**
 
-- [ ] Rename this plan to `docs/agents/features/EXECUTED-user-oauth-auth.md`.
-- [ ] Change `Status:` to `executed`.
-- [ ] Add `Outcome` and `Current Accuracy` with the exact verification results and any
+- [x] Rename this plan to `docs/agents/features/EXECUTED-user-oauth-auth.md`.
+- [x] Change `Status:` to `executed`.
+- [x] Add `Outcome` and `Current Accuracy` with the exact verification results and any
       implementation divergence.
-- [ ] Record which `docs/AGENTS.md` review dimensions were checked.
-- [ ] Commit:
+- [x] Record which `docs/AGENTS.md` review dimensions were checked.
+- [x] Commit:
 
   ```bash
   git add docs/agents/features
@@ -838,27 +915,27 @@ Use private local values only; do not add them to the repository.
 
 ## Acceptance criteria
 
-- [ ] `npm run typecheck`, `npm run build`, `npm test`, and `git diff --check` pass.
-- [ ] `ALL_LOGIN_SCOPES` is the unique union of all four runtime scope arrays and includes
+- [x] `npm run typecheck`, `npm run build`, `npm test`, and `git diff --check` pass.
+- [x] `ALL_LOGIN_SCOPES` is the unique union of all four runtime scope arrays and includes
       the container-version edit scope.
-- [ ] `credentialSource.ts`, workload branches, bootstrap implementation, bootstrap tests,
+- [x] `credentialSource.ts`, workload branches, bootstrap implementation, bootstrap tests,
       and `bootstrap:access` are gone.
-- [ ] Both OAuth paths are required and absolute; Desktop client secrets and stored tokens
+- [x] Both OAuth paths are required and absolute; Desktop client secrets and stored tokens
       are strictly validated.
-- [ ] The loopback flow uses `127.0.0.1`, an ephemeral port, exact path/method checks, random
+- [x] The loopback flow uses `127.0.0.1`, an ephemeral port, exact path/method checks, random
       single-use state, PKCE S256, one valid callback, and a five-minute timeout.
-- [ ] Tests exercise the real HTTP listener while stubbing only Google OAuth exchange.
-- [ ] Failed re-login preserves the existing token.
-- [ ] The token file contains only the four allowed fields, is atomically replaced, is
+- [x] Tests exercise the real HTTP listener while stubbing only Google OAuth exchange.
+- [x] Failed re-login preserves the existing token.
+- [x] The token file contains only the four allowed fields, is atomically replaced, is
       regular, and is mode `0600`.
-- [ ] Runtime validates granted scopes, primes token refresh, and redacts `invalid_grant`.
-- [ ] No secret, code, verifier, token, or raw provider error reaches stderr, audit logs,
+- [x] Runtime validates granted scopes, primes token refresh, and redacts `invalid_grant`.
+- [x] No secret, code, verifier, token, or raw provider error reaches stderr, audit logs,
       errors, fixtures, or git. The displayed authorization URL is the sole intentional
       state/challenge output.
-- [ ] The exact same 12 MCP tools and all safety gates remain unchanged.
-- [ ] Canonical setup docs contain no workload-credential/bootstrap configuration and
+- [x] The exact same 12 MCP tools and all safety gates remain unchanged.
+- [x] Canonical setup docs contain no workload-credential/bootstrap configuration and
       accurately explain Google's seven-day Testing behavior.
-- [ ] MCP URL elicitation is documented as technically supported but deferred; the plan
+- [x] MCP URL elicitation is documented as technically supported but deferred; the plan
       does not justify the CLI with a false MCP limitation.
 - [ ] Manual GA4 and GTM reads succeed under placeholder private resources; no live write or
       publish is required.
@@ -866,11 +943,11 @@ Use private local values only; do not add them to the repository.
 ## Cross-references
 
 - Current auth: `src/auth/scopes.ts`, `src/auth/googleAuth.ts`,
-  `src/auth/credentialSource.ts`
+  `src/auth/userOAuth.ts`
 - Server contract: `src/server.ts`, `tests/server.boot.test.ts`
 - Error contract: `src/utils/errors.ts`
 - Redaction helper: `src/utils/redact.ts`
 - Setup-doc rules: `docs/AGENTS.md`
 - Superseded bootstrap record:
-  `../bugfixes/EXECUTED-2026-05-29-service-account-bootstrap-auth.md`
+  `../bugfixes/OBSOLETE-2026-05-29-service-account-bootstrap-auth.md`
 - Historical server plan: `EXECUTED-2026-05-28-build-mcp-server.md`

@@ -21,6 +21,19 @@ The operator's Google user account must already have the intended permissions in
 6. Configure the MCP host with the same two absolute paths.
 7. Run MCP tools against reviewed `*.mcp-execution.yaml` specs.
 
+## Migrate from workload authentication
+
+If an existing MCP launcher still uses the former workload-auth setup:
+
+1. Remove the legacy <code>GOOGLE_APPLICATION&#95;CREDENTIALS</code> entry and every <code>ALLOW_GOOGLE_*</code> entry from the launcher environment.
+2. Complete [Google Cloud OAuth setup](google-cloud-credentials.md) and download a Desktop OAuth client JSON.
+3. Store the Desktop client JSON and token destination at private absolute paths.
+4. Set `GOOGLE_OAUTH_CLIENT_SECRETS` and `GOOGLE_OAUTH_TOKEN_PATH` to those paths.
+5. Run `npm run login` and complete browser consent as the operator whose existing GA4/GTM permissions the server should use.
+6. Restart the MCP host so it drops the old environment and loads the new OAuth files.
+
+Do not leave both credential models configured. The current runtime reads only the two user-OAuth paths.
+
 Read the focused guides in order:
 
 - [Google Cloud OAuth setup](google-cloud-credentials.md)

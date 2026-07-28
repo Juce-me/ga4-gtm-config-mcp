@@ -2626,7 +2626,7 @@ The result differs from the plan's M8 sketch in three honest ways, each to keep 
 
 ## Current Accuracy
 
-**Accurate as of 2026-05-28.** Shipped code, tests, and `README.md` are now the source of truth; this artifact is historical context.
+**Partially accurate historical context.** Authentication and setup details that describe workload credentials, service accounts, or unsupported user refresh-token OAuth were superseded on 2026-07-28 by the local user-OAuth implementation. Current code, `README.md`, and `docs/setup/` are authoritative for authentication; the non-authentication server architecture and milestone record below remain historical context.
 
 - The §Milestones, §File Structure, §Error Codes, and §Audit Log sections describe what shipped and remain accurate, with these noted refinements captured in the slice outcomes: `Tag.type` is a free `z.string()`, the MP-secret `action` accepts the planner's `manual_create_or_mcp_create_placeholder` literal, TypeScript is pinned to 5.9.3, and the two synthetic-input gate fixtures were tested inline rather than as YAML files.
 - `AGENTS.md` §10 previously stated `googleapis` was "intentionally NOT a dependency" and listed only four `src/` subdirs — both were left over from the M0–M3 slice and are now corrected (`googleapis@172.0.0` is a listed core dep; all eight subdirs are listed).

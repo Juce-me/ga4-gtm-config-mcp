@@ -111,21 +111,74 @@ The operator's GA4/GTM product permissions remain an additional boundary. Posses
 
 ## Common failures
 
-`User OAuth configuration or token validation failed.`
+MCP tools serialize authentication failures with this public shape:
 
-: One of the two paths is missing, relative, unreadable, not a regular file, invalid JSON, or inconsistent with the client that created the token. Correct the absolute paths or run `npm run login`.
+```json
+{
+  "error": {
+    "code": "PERMISSION_DENIED",
+    "message": "User OAuth configuration or token validation failed.",
+    "details": {
+      "reason": "client_secrets_path_missing"
+    }
+  }
+}
+```
+
+The `details.reason` value is a stable redacted code. Configuration and token loading may return:
+
+- path reasons: `client_secrets_path_missing`, `token_path_missing`, `client_secrets_path_not_absolute`, `token_path_not_absolute`;
+- file reasons: `client_secrets_unreadable`, `token_unreadable`, `client_secrets_not_regular`, `token_not_regular`, `client_secrets_invalid_json`, `token_invalid_json`;
+- Desktop-client reasons: `desktop_client_missing`, `client_id_missing`, `client_secret_missing`; or
+- token-record reasons: `token_invalid`, `token_missing_fields`, `token_unknown_fields`, `token_refresh_token_invalid`, `token_scopes_invalid`, `token_scopes_empty`, `token_scope_invalid`, `token_scopes_duplicate`, `token_client_id_invalid`, `token_timestamp_invalid`, `token_client_id_mismatch`.
+
+The payload never includes a credential path, token value, client secret, or raw Google response. Correct the absolute paths or run `npm run login`, depending on the reason.
+
+### Direct login failure
+
+When `npm run login` fails, the command exits nonzero and writes only:
+
+```text
+User OAuth login failed.
+```
+
+It deliberately does not print the internal stable reason or raw provider error. Check both absolute paths and the Desktop-client file, then retry the browser flow. A timeout, rejected consent, invalid callback, incomplete scope grant, missing refresh token, or local token-write failure all use this same public CLI message.
+
+### Stored grant lacks a required scope
 
 `Stored Google OAuth grant does not cover ... mode. Run npm run login.`
 
-: The token predates the current all-scope login or consent was incomplete. Run `npm run login` and approve the complete requested scope set.
+: This is `PERMISSION_DENIED` with `details.reason = "missing_required_scopes"`. The token predates the current all-scope login or consent was incomplete. Run `npm run login` and approve the complete requested scope set.
+
+### Authorization revoked or expired
 
 `Google OAuth authorization expired or was revoked. Run npm run login.`
 
-: Google returned `invalid_grant`. Follow [User OAuth login: Recovery](user-oauth-login.md#recovery), replace the token, and restart the MCP host.
+: This is `PERMISSION_DENIED` with an empty `details` object after Google returns `invalid_grant`. Follow [User OAuth login: Recovery](user-oauth-login.md#recovery), replace the token, and restart the MCP host.
+
+### Generic refresh failure
+
+```json
+{
+  "error": {
+    "code": "PERMISSION_DENIED",
+    "message": "Google OAuth token refresh failed. Run npm run login.",
+    "details": {
+      "reason": "oauth_refresh_failed"
+    }
+  }
+}
+```
+
+The server intentionally replaces the provider error with this stable shape. Run `npm run login`, replace the token, and restart the MCP host.
+
+### Product permission failure
 
 `PERMISSION_DENIED` from a GA4 or GTM API call
 
 : The OAuth token is valid, but the operator's Google user lacks the required permission in the target product. Have an authorized product administrator grant the intended GA4/GTM role, then retry.
+
+### Publish mode disabled
 
 `Publish mode requires INCLUDE_PUBLISH_SCOPE=1.`
 

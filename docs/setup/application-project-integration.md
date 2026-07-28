@@ -1,79 +1,44 @@
 # Application project integration
 
-This file answers: **what should another application repo support when it needs GA4/GTM configuration through this MCP server?**
+The application repo owns analytics planning and instrumentation. This MCP repo executes a reviewed desired-state specification as the operator's Google user.
 
-The application repo is the planning and instrumentation side. This MCP repo is the execution side.
+## Application repo responsibilities
 
-## Application Repo Responsibilities
+Each application repo should maintain:
 
-Each app repo should maintain:
+1. An analytics contract covering event names, `dataLayer` payloads, consent behavior, forbidden PII, and custom-dimension or metric intent.
+2. Source-level instrumentation and practical tests for emitted payloads.
+3. Reviewed `*.mcp-execution.yaml` specs with desired GA4/GTM state, target environment, and approval gates.
+4. Private target mapping for the GA4 property and GTM account/container.
 
-1. An analytics contract:
-   - event names
-   - dataLayer payload shape
-   - consent behavior
-   - forbidden PII keys
-   - custom dimension/metric intent
-2. Source-level instrumentation:
-   - where events fire
-   - tests around emitted payloads where practical
-   - no raw email, names, tokens, free text, full URLs with query strings, or secret-shaped values
-3. Reviewed `*.mcp-execution.yaml` specs:
-   - desired GA4 custom dimensions/metrics/key events
-   - desired GTM variables/triggers/tags
-   - target environment
-   - approval gates
-4. Private target mapping:
-   - GA4 property ID
-   - GTM account ID
-   - GTM container ID
-   - environment name
+The application repo must not assume OAuth grants product permissions. Before execution, the operator's Google user must already have the intended access in the target GA4 property and GTM account/container.
 
-## Application Repo Must Not Store
+## Keep credentials out of the application repo
 
-Do not store this MCP server's:
+Do not store:
 
-- service-account JSON key
-- WIF external-account credential file unless it is intentionally scoped to that repo's CI and kept in secret storage
-- impersonated ADC / `application_default_credentials.json`; it includes nested human `source_credentials`
-- OAuth Web client secret
-- one-time OAuth access token
-- refresh token
-- real production IDs in public README examples
+- the downloaded OAuth Desktop client JSON;
+- the generated refresh-token file;
+- an OAuth client ID or secret;
+- an access token or refresh token;
+- a real operator email;
+- real production IDs in public examples;
+- machine-specific absolute paths in tracked configuration.
 
-Use placeholders in public docs:
+Keep the two credential files in private operator storage. Configure their absolute paths only in the local MCP host:
 
 ```text
-PROJECT_ID
-GA4_PROPERTY_ID
-GTM_ACCOUNT_ID
-GTM_CONTAINER_ID
-SERVICE_ACCOUNT_NAME@PROJECT_ID.iam.gserviceaccount.com
+GOOGLE_OAUTH_CLIENT_SECRETS=/absolute/path/to/private/google-oauth-client.json
+GOOGLE_OAUTH_TOKEN_PATH=/absolute/path/to/private/google-oauth-token.json
 ```
 
-## Handoff To This MCP Server
+## Execution handoff
 
-For a configuration change:
+1. The application repo produces or updates an `*.mcp-execution.yaml` spec.
+2. A human reviews the spec and its gates.
+3. The operator starts this MCP server with the private OAuth paths.
+4. The server validates the spec, reads current state, and computes a deterministic diff.
+5. Approved writes go to GA4 and a non-live GTM workspace.
+6. Preview, container-version creation, and publish remain separate gated steps.
 
-1. The app repo produces or updates an `*.mcp-execution.yaml` spec.
-2. A human reviews the spec.
-3. The operator runs this MCP server.
-4. This MCP server validates the spec.
-5. This MCP server reads current GA4/GTM state.
-6. This MCP server computes a diff.
-7. Approved writes go to a non-live GTM workspace and GA4 Admin API.
-8. Preview, version creation, and publish remain separate gated steps.
-
-## Recommended Private Operator Notes
-
-Keep a private operator note outside public docs with:
-
-```text
-GA4 property: properties/GA4_PROPERTY_ID
-GTM account: GTM_ACCOUNT_ID
-GTM container: GTM_CONTAINER_ID
-service account: SERVICE_ACCOUNT_NAME@PROJECT_ID.iam.gserviceaccount.com
-credential path on this machine: <credential-json-path>
-```
-
-That note is operational configuration, not product documentation.
+Target IDs belong in the reviewed spec and explicit tool arguments, not OAuth files or environment variables. Public docs should use placeholders such as `GA4_PROPERTY_ID`, `GTM_ACCOUNT_ID`, and `GTM_CONTAINER_ID`.

@@ -1,4 +1,4 @@
-Status: executed
+Status: obsolete
 Type: bugfix
 Author: a.feygin
 
@@ -6,7 +6,7 @@ Author: a.feygin
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **Status note (2026-05-29):** Implemented with changes. The shipped version adds a runtime credential-source guard, bootstrap-only scopes, GA4/GTM access bootstrap helpers, a dry-run-by-default bootstrap CLI, and updated auth setup docs. Post-review fixes force metadata auth through an explicit `Compute` client, remove the unsupported GA4 `updateMask` patch param, reject conflicting `--dry-run`/`--apply` flags, and paginate GA4/GTM access lookups. Live mutation validation remains optional and was not run in this session because it requires disposable GA4/GTM resources and explicit operator approval.
+> **Status note (2026-07-28):** Obsolete. The workload-credential and product-access bootstrap design was removed when runtime authentication moved to local user OAuth.
 
 **Goal:** Keep service accounts as the MCP runtime identity while fixing the broken setup path where operators try to add a service account through GA4/GTM UI user management.
 
@@ -360,33 +360,8 @@ Expected: read-only tools succeed as the service account; no user OAuth refresh 
 
 ## Outcome
 
-Implemented with changes. The implementation is now the source of truth.
-
-Shipped behavior:
-
-- `src/auth/credentialSource.ts` rejects `authorized_user` ADC at runtime and allows service-account, external-account/WIF, or explicitly opted-in metadata credentials.
-- `src/auth/googleAuth.ts` uses an explicit metadata `Compute` client when `ALLOW_GOOGLE_METADATA_AUTH=1`, so local user ADC cannot be selected through the metadata path.
-- `src/auth/scopes.ts` keeps GA4/GTM user-management scopes as bootstrap-only constants outside normal runtime scope tiers.
-- `src/bootstrap/accessBootstrap.ts` provides idempotent, paginated GA4 `accessBindings` and GTM `user_permissions` helpers with dry-run planning.
-- `src/cli/bootstrapAccess.ts` parses bootstrap arguments, rejects conflicting write/dry-run flags, prompts for a one-time admin access token, builds in-memory OAuth clients, and prints redacted summaries.
-- `README.md` and `.env.example` now document the bootstrap/runtime split and explicitly forbid runtime refresh-token auth.
-
-Verification performed:
-
-- `npm test -- tests/auth.test.ts tests/auth.credentialSource.test.ts` passed before continuing.
-- `npm test -- tests/bootstrap.ga4Access.test.ts tests/bootstrap.gtmAccess.test.ts` passed during helper review.
-- `npm test -- tests/bootstrap.cli.test.ts` passed after CLI implementation.
-- `npm test -- tests/auth.test.ts tests/bootstrap.cli.test.ts tests/bootstrap.ga4Access.test.ts tests/bootstrap.gtmAccess.test.ts` passed after review fixes.
-- `npm run typecheck` exited 0.
-- `npm test` passed: 40 files, 178 tests.
-- `npm run build` exited 0.
-- `rg -n "refresh-token flow|Use the service-account path until|must have GA4 Admin.*GTM.*access" README.md .env.example src` returned no stale claims.
-- `git diff --check` exited 0.
-
-Pending verification:
-
-- Optional live validation still requires disposable GA4/GTM resources and explicit operator approval.
+Superseded by implementation. The service-account runtime, workload credential sources, user-management bootstrap scopes, and bootstrap CLI described here were implemented historically and later removed. Current runtime authentication uses a local Google user OAuth grant created by `npm run login`.
 
 ## Current Accuracy
 
-Accurate for implemented code and docs. The original plan did not include `tests/bootstrap.cli.test.ts`, which was added to cover CLI parsing and injected dry-run execution. A final review also found and the implementation fixed metadata-auth ADC fallback, unsupported GA4 `updateMask`, conflicting CLI flags, and paginated access lookup gaps.
+Obsolete as current guidance. The problem investigation, original design, and verification record remain historical context only. The filenames, commands, environment variables, credential model, and setup flow in this artifact no longer match the repository; use `README.md` and `docs/setup/` as the current source of truth.

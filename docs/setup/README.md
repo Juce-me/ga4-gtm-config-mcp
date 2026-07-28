@@ -1,70 +1,52 @@
 # Setup overview
 
-This setup has three different identities. Keep them separate:
+This server uses one local Google user OAuth grant. Keep these boundaries separate:
 
-| Name | What it is | Where it lives | What it is used for | Stored by MCP? |
-|------|------------|----------------|---------------------|----------------|
-| **Service account** | Google workload identity such as `SERVICE_ACCOUNT_NAME@PROJECT_ID.iam.gserviceaccount.com` | Google Cloud project | The MCP server's runtime identity | Yes, as a service-account JSON, WIF config, impersonated ADC, or metadata identity |
-| **OAuth Web client** | Client ID + client secret for an OAuth consent flow | Google Auth Platform in a Google Cloud project | Lets OAuth Playground mint one short-lived human-admin access token | No |
-| **Human admin user** | A real Google user with GA4/GTM user-management rights | Google Account / Workspace | Approves the one-time OAuth bootstrap token | No |
-| **MCP client** | Claude Desktop, Claude Code, Codex, or another MCP host | Operator machine | Starts `node dist/server.js` over stdio and passes environment variables | N/A |
+| Item | Purpose | What it does not do |
+|------|---------|---------------------|
+| Google Cloud project | Owns the OAuth consent configuration, Desktop client, and enabled APIs | Does not grant access to a GA4 property or GTM account/container |
+| OAuth Desktop client | Identifies this local application during browser login | Does not carry GA4/GTM product permissions |
+| Operator's Google user | Authorizes the requested API scopes and performs GA4/GTM operations | Does not gain product access through OAuth |
+| MCP client | Starts `node dist/server.js` and passes private absolute file paths | Is not the Google OAuth client |
 
-The MCP server must run as a workload identity. It must not run as a human user refresh token.
+The operator's Google user account must already have the intended permissions in every target GA4 property and GTM account/container. Google OAuth authorizes API use as that user; it does not add the user to either product.
 
-## Entity Boundaries
+## Required flow
 
-These are separate things and may be owned by different teams:
+1. In a Google Cloud project, enable the Google Analytics Admin API and Tag Manager API.
+2. Configure the Google Auth Platform audience and create an OAuth client with application type **Desktop app**.
+3. Download the client JSON to a private local path.
+4. Set `GOOGLE_OAUTH_CLIENT_SECRETS` and `GOOGLE_OAUTH_TOKEN_PATH` to absolute paths.
+5. Run `npm run login`, open the printed URL, and authorize with the operator's Google user.
+6. Configure the MCP host with the same two absolute paths.
+7. Run MCP tools against reviewed `*.mcp-execution.yaml` specs.
 
-| Entity | Example placeholder | Purpose |
-|--------|---------------------|---------|
-| Google Cloud project | `PROJECT_ID` | Owns service accounts, OAuth clients, WIF pools, enabled APIs |
-| Service account | `SERVICE_ACCOUNT_NAME@PROJECT_ID.iam.gserviceaccount.com` | Runtime identity for the MCP server |
-| GA4 property | `properties/GA4_PROPERTY_ID` | Analytics Admin API target |
-| GTM account/container | `GTM_ACCOUNT_ID` / `GTM_CONTAINER_ID` | Tag Manager API target |
-| Application repo | product source repo | Owns instrumentation and reviewed `*.mcp-execution.yaml` specs |
-| Operator machine / MCP host | Claude Desktop, Claude Code, Codex, CI runner | Starts this MCP server and passes credential env vars |
+Read the focused guides in order:
 
-The Google Cloud project does **not** automatically grant access to GA4 or GTM. Product access is granted separately by [Product access bootstrap](product-access-bootstrap.md).
+- [Google Cloud OAuth setup](google-cloud-credentials.md)
+- [User OAuth login](user-oauth-login.md)
+- [MCP client configuration](mcp-client-configuration.md)
+- [Application project integration](application-project-integration.md)
 
-## Required Flow
+## Security boundary
 
-1. Create a Google Cloud runtime credential:
-   - external-account / Workload Identity Federation JSON for keyless external runtimes,
-   - impersonated ADC for local real-API testing when explicitly enabled,
-   - metadata-server credentials for trusted Google Cloud runtimes, or
-   - service-account JSON only when key creation is explicitly allowed.
-2. Enable the required APIs in the Google Cloud project that owns that credential.
-3. Use a human GA4/GTM admin only once to create a short-lived OAuth access token.
-4. Run `npm run bootstrap:access` to grant product-level GA4/GTM access to the service-account email.
-5. Configure the MCP client to pass `GOOGLE_APPLICATION_CREDENTIALS=<credential-json-path>` for runtime authentication.
-6. Run MCP tools against reviewed `*.mcp-execution.yaml` specs.
+The downloaded client JSON contains an OAuth client secret, and the generated token file contains a plaintext refresh token. Keep both outside version control, restrict access to the operator, and never paste either into docs, specs, issue reports, logs, or MCP tool arguments.
 
-`GOOGLE_APPLICATION_CREDENTIALS` is not the product-access grant. It is only how the MCP process authenticates as the workload identity after GA4/GTM access has been granted separately.
+Login requests the complete scope set needed for read, write, container-version, and publish modes. Google consent is therefore broader than a read-only session even when publishing is operationally disabled. `INCLUDE_PUBLISH_SCOPE` is a separate runtime gate: leaving it unset blocks publish mode, but it does not remove the publish scope from the stored grant.
 
-## Read Next
+## Audience and token lifetime
 
-- [Google Cloud credentials](google-cloud-credentials.md) explains the service account, WIF credential, impersonated ADC, metadata credential, optional service-account key, API enablement, and exact Cloud Console pages.
-- [Product access bootstrap](product-access-bootstrap.md) explains the OAuth Web client, OAuth Playground, one-time access token, and bootstrap CLI.
-- [MCP client configuration](mcp-client-configuration.md) explains where `GOOGLE_APPLICATION_CREDENTIALS` goes for the MCP host.
-- [Application project integration](application-project-integration.md) explains what other app repos must provide and what they must not store.
+- **Internal** is available only when the Cloud project belongs to a Google Workspace or Cloud Identity organization and the intended user belongs to that organization.
+- **External** in **Testing** requires test users for these non-basic GA4/GTM scopes. Their authorizations and refresh tokens expire after seven days.
+- A durable one-time local login therefore requires either an eligible **Internal** app or an **External** app configured for **In production**.
+- Durable does not mean permanent. Revocation, inactivity, account policy, and other Google conditions can still invalidate a refresh token.
+- Verification requirements, warning screens, and user caps depend on the audience, publishing status, and requested scopes. Follow Google's current policy for the intended users.
 
-## Product Permissions Granted By Bootstrap
+Current Google references:
 
-The current bootstrap CLI grants:
+- [OAuth overview and refresh-token expiration](https://developers.google.com/identity/protocols/oauth2)
+- [OAuth app audience and seven-day Testing behavior](https://support.google.com/cloud/answer/15549945)
 
-- GA4 property access binding: `predefinedRoles/editor`
-- GTM account user permission: `accountAccess.permission = user`
-- GTM container permission: `edit`
+## Placeholder policy
 
-Run bootstrap once per GA4 property / GTM container pair that the service account must manage.
-
-## What Never Goes In Public Docs
-
-Use placeholders for:
-
-- Google Cloud project IDs
-- GA4 account/property/stream IDs
-- GTM account/container/workspace/version IDs
-- service-account emails
-- OAuth client IDs/secrets
-- access tokens, refresh tokens, private keys
+Public examples use placeholders only. Never add a real OAuth client ID or secret, refresh token, email, Google Cloud project ID, GA4 account/property/stream ID, GTM account/container/workspace/version ID, or machine-specific path.

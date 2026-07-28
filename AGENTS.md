@@ -165,11 +165,12 @@ This is an execution layer, not an analytics planner. It must not invent events,
 - Build: `npm run build` (TypeScript → `dist/`)
 - Test: `npm test` (vitest, run-mode; `npm run test:watch` for watch)
 - Typecheck: `npm run typecheck`
+- Authorize local user OAuth: `npm run login` (build + loopback browser flow)
 - Run locally: `npm run dev` (build + run) or `npm run mcp` (run prebuilt). Server speaks MCP over stdio.
 
 ### Layout
 - Project root: repository root (the `ga4-gtm-config-mcp/` directory).
-- Source: `src/` — subdirs `utils/` (errors, redact, stableJson, logger, names), `spec/` (zod schema, readSpec, validateSpec, summarize), `safety/` (9 guards), `auth/` (scopes + GoogleAuth factory), `ga4/` (Admin client + read/upsert wrappers), `gtm/` (Tag Manager client + read/upsert/version/preview/publish wrappers), `planner/` (desiredState, currentState, diff, applyPlan), `tools/` (12 MCP tool registrations).
+- Source: `src/` — subdirs `utils/` (errors, redact, stableJson, logger, names), `spec/` (zod schema, readSpec, validateSpec, summarize), `safety/` (9 guards), `auth/` (user OAuth paths/token validation, scope tiers, auth factory), `cli/` (loopback OAuth login), `ga4/` (Admin client + read/upsert wrappers), `gtm/` (Tag Manager client + read/upsert/version/preview/publish wrappers), `planner/` (desiredState, currentState, diff, applyPlan), `tools/` (12 MCP tool registrations).
 - Tests: `tests/` (vitest), with `tests/fixtures/specs/*.yaml` for spec fixtures.
 - Build output: `dist/` (gitignored).
 - Audit log: `.audit/audit-YYYY-MM-DD.log` (gitignored; one JSON line per safety event, written through `utils/redact`).
@@ -186,6 +187,9 @@ This is an execution layer, not an analytics planner. It must not invent events,
 
 ### Repo-specific constraints
 - No raw secret values may appear in source, tests, fixtures, or audit log. The `secret_value` field in the spec is constrained at the zod level to the literal string `"NEVER_STORE_SECRET_IN_SPEC"`.
+- Runtime authentication uses a local Google user refresh token created by `npm run login`; the operator's user must already have the intended GA4/GTM product permissions.
+- `GOOGLE_OAUTH_CLIENT_SECRETS` and `GOOGLE_OAUTH_TOKEN_PATH` are required absolute paths. Login requests all runtime scopes and stores only the validated token record at mode `0600`.
+- `INCLUDE_PUBLISH_SCOPE=1` gates publish-mode operations; it does not control which scopes login requests and does not replace the remaining publish guards.
 - Every gated dangerous tool requires both a spec-level boolean flag AND a per-call `approval_token`. Gates return ALL failing reasons, never just the first.
 - The live/default GTM workspace (`workspaceId: "0"` or name `"Default Workspace"`) is unconditionally rejected by `assertWorkspaceSafe`.
 - Tag.type at the zod schema layer is `z.string()` (free); disallowed types (consent, UA-era) are rejected by `validateSpec` with the correct semantic error code, not a generic schema error.
@@ -202,12 +206,10 @@ This is an execution layer, not an analytics planner. It must not invent events,
 - Add a new line only when the user corrects the agent and the correction is likely to recur.
 - Tighten an existing line instead of adding a near-duplicate.
 - Delete stale learnings when the underlying issue goes away.
-- Before documenting auth setup, separate runtime credential authentication (`GOOGLE_APPLICATION_CREDENTIALS`, WIF, or metadata) from GA4/GTM product-access grants, and verify both mechanics; do not assume service accounts can be added through product UI user flows.
-- When documenting Google Cloud runtime credentials, present service-account JSON keys as an optional fallback only; include the `constraints/iam.disableServiceAccountKeyCreation` path to WIF or metadata credentials.
-- Never put real project IDs, account IDs, property IDs, container IDs, or service-account emails in public repo docs; use placeholders.
-- For gcloud service-account impersonation ADC, require top-level `type: "impersonated_service_account"`; top-level `authorized_user` remains plain user ADC even with `service_account_impersonation_url`.
-- Reject top-level URL override fields such as `endpoint` before passing impersonated ADC JSON to google-auth-library.
-- For impersonated ADC, only allow omitted or exact `googleapis.com` universe-domain fields at the top level and under `source_credentials`.
-- For impersonated ADC, require `service_account_impersonation_url` to use `https:` and the exact `/v1/projects/-/serviceAccounts/<target>:generateAccessToken` path shape.
+- Document Google Cloud OAuth-client setup separately from the operator's existing GA4/GTM product permissions; OAuth never grants product access.
+- Use absolute placeholder paths for the Desktop client JSON, token file, Node executable, and server entrypoint in every MCP configuration example.
+- State that `npm run login` requests all runtime scopes and stores a plaintext refresh token at mode `0600`.
+- Describe `INCLUDE_PUBLISH_SCOPE` only as the publish-mode operation gate; it does not alter scope acquisition or bypass publish guards.
+- Never put real project IDs, account IDs, property IDs, container IDs, user emails, OAuth client values, tokens, or machine paths in public repo docs; use placeholders.
 
 When the user corrects your approach, append a one-line rule here before ending the session. Write it concretely ("Always use X for Y"), never abstractly ("be careful with Y"). If an existing line already covers the correction, tighten it instead of adding a new one. Remove lines when the underlying issue goes away (model upgrades, refactors, process changes).

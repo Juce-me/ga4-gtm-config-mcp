@@ -6,6 +6,8 @@ Author: minired-panda
 
 > **Status note (2026-05-28):** ALL milestones M0–M8 have shipped on branch `feat/m0-m3-validator-slice`. Slices 1–5 (M0–M7) are recorded in the §Slice outcome sections near the end of this file; M8 (examples, `.env.example`, README, this rename + outcome, AGENTS.md §10 refresh) is recorded in the §Outcome and §Current Accuracy sections at the very end. Final verification: `npm run typecheck`, `npm run build`, and `npm test` (123/123) all green; the built server boots with 12 tools. This artifact is now historical — shipped code, tests, and `README.md` are the source of truth.
 
+> **Supersession note (2026-07-28):** Authentication and setup portions that describe workload credentials were later replaced by local user OAuth; current code, `README.md`, and `docs/setup/` are authoritative.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Implement a TypeScript MCP server that consumes an approved `*.mcp-execution.yaml` spec from `google-analytics-implementation-planner`, reads current GA4/GTM state, produces a deterministic diff, applies approved changes safely into a non-live GTM workspace, and hard-blocks both container-version creation and publishing unless explicitly approved.

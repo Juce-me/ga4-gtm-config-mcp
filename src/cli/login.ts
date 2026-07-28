@@ -55,6 +55,12 @@ type Listener = {
   close(): Promise<void>;
 };
 
+type LoginPhase = "pre-commit" | "committing" | "committed";
+
+type LoginLifecycle = {
+  phase: LoginPhase;
+};
+
 function loginFailure(reason: string): MCPError {
   return new MCPError(
     "PERMISSION_DENIED",
@@ -181,6 +187,18 @@ function sendBrowserResponse(
   response.end(body);
 }
 
+function sendBrowserResponseSafely(
+  response: ServerResponse,
+  statusCode: number,
+  body: string,
+): void {
+  try {
+    sendBrowserResponse(response, statusCode, body);
+  } catch {
+    // Browser transport failures do not determine the login result.
+  }
+}
+
 function stateMatches(expected: string, actual: string): boolean {
   const expectedBytes = Buffer.from(expected);
   const actualBytes = Buffer.from(actual);
@@ -237,19 +255,23 @@ function waitForCallback(options: {
   clientId: string;
   now: () => Date;
   timeoutMs: number;
+  lifecycle: LoginLifecycle;
 }): Promise<{ tokenPath: string; grantedScopes: string[] }> {
   return new Promise((resolve, reject) => {
     let settled = false;
     let callbackConsumed = false;
     let activeGeneration = 0;
-    let commitPhaseClaimed = false;
 
     const beginShutdown = (forceActiveConnections: boolean) => {
       void options.listener.close().catch(() => {
         // The outer lifecycle awaits and translates listener-close failures.
       });
       if (forceActiveConnections) {
-        options.listener.server.closeAllConnections();
+        try {
+          options.listener.server.closeAllConnections();
+        } catch {
+          // Cleanup does not determine the login result.
+        }
       }
     };
 
@@ -272,12 +294,12 @@ function waitForCallback(options: {
     const claimCommitPhase = (callbackGeneration: number): boolean => {
       if (
         settled
-        || commitPhaseClaimed
+        || options.lifecycle.phase !== "pre-commit"
         || activeGeneration !== callbackGeneration
       ) {
         return false;
       }
-      commitPhaseClaimed = true;
+      options.lifecycle.phase = "committing";
       clearTimeout(timeout);
       return true;
     };
@@ -287,11 +309,12 @@ function waitForCallback(options: {
       statusCode: number,
       reason: string,
     ) => {
-      sendBrowserResponse(response, statusCode, FAILURE_BODY);
+      sendBrowserResponseSafely(response, statusCode, FAILURE_BODY);
       finish({ ok: false, error: loginFailure(reason) });
     };
 
     const onServerError = () => {
+      if (options.lifecycle.phase !== "pre-commit") return;
       activeGeneration++;
       beginShutdown(true);
       finish({ ok: false, error: loginFailure("listener_failed") });
@@ -300,7 +323,7 @@ function waitForCallback(options: {
     const onRequest = (request: IncomingMessage, response: ServerResponse) => {
       void (async () => {
         if (settled || callbackConsumed) {
-          sendBrowserResponse(response, 400, FAILURE_BODY);
+          sendBrowserResponseSafely(response, 400, FAILURE_BODY);
           return;
         }
         if (request.method !== "GET") {
@@ -348,6 +371,9 @@ function waitForCallback(options: {
           !settled && activeGeneration === callbackGeneration;
         beginShutdown(false);
 
+        let refreshToken: string;
+        let grantedScopes: string[];
+        let obtainedAt: string;
         try {
           let tokenResponse: Awaited<ReturnType<OAuth2ClientBoundary["getToken"]>>;
           try {
@@ -362,48 +388,62 @@ function waitForCallback(options: {
           }
 
           if (!callbackIsActive()) return;
-          const refreshToken = requireRefreshToken(
-            tokenResponse.tokens.refresh_token,
-          );
-          const grantedScopes = parseGrantedScopes(tokenResponse.tokens.scope);
-          if (!claimCommitPhase(callbackGeneration)) return;
-          await writeStoredUserOAuthToken(options.tokenPath, {
-            refresh_token: refreshToken,
-            granted_scopes: grantedScopes,
-            client_id: options.clientId,
-            obtained_at: options.now().toISOString(),
-          });
-          if (!callbackIsActive()) return;
-          sendBrowserResponse(response, 200, SUCCESS_BODY);
-          finish({
-            ok: true,
-            value: {
-              tokenPath: options.tokenPath,
-              grantedScopes,
-            },
-          });
+          refreshToken = requireRefreshToken(tokenResponse.tokens.refresh_token);
+          grantedScopes = parseGrantedScopes(tokenResponse.tokens.scope);
+          obtainedAt = options.now().toISOString();
         } catch (error) {
           if (!callbackIsActive()) return;
-          sendBrowserResponse(response, 400, FAILURE_BODY);
+          sendBrowserResponseSafely(response, 400, FAILURE_BODY);
           finish({
             ok: false,
             error: error instanceof MCPError
               ? error
               : loginFailure("login_callback_failed"),
           });
+          return;
         }
+
+        if (!claimCommitPhase(callbackGeneration)) return;
+        try {
+          await writeStoredUserOAuthToken(options.tokenPath, {
+            refresh_token: refreshToken,
+            granted_scopes: grantedScopes,
+            client_id: options.clientId,
+            obtained_at: obtainedAt,
+          });
+        } catch (error) {
+          if (!callbackIsActive()) return;
+          sendBrowserResponseSafely(response, 400, FAILURE_BODY);
+          finish({
+            ok: false,
+            error: error instanceof MCPError
+              ? error
+              : loginFailure("login_callback_failed"),
+          });
+          return;
+        }
+
+        options.lifecycle.phase = "committed";
+        sendBrowserResponseSafely(response, 200, SUCCESS_BODY);
+        finish({
+          ok: true,
+          value: {
+            tokenPath: options.tokenPath,
+            grantedScopes,
+          },
+        });
       })();
     };
 
     const timeout = setTimeout(() => {
-      if (commitPhaseClaimed) return;
+      if (options.lifecycle.phase !== "pre-commit") return;
       activeGeneration++;
       beginShutdown(true);
       finish({ ok: false, error: loginFailure("login_timeout") });
     }, options.timeoutMs);
 
     options.listener.server.on("request", onRequest);
-    options.listener.server.once("error", onServerError);
+    options.listener.server.on("error", onServerError);
   });
 }
 
@@ -418,6 +458,7 @@ export async function runLogin(options?: {
   const paths = resolveUserOAuthPaths(options?.env ?? process.env);
   const client = readDesktopOAuthClient(paths.clientSecretsPath);
   const listener = await openLoopbackListener();
+  const lifecycle: LoginLifecycle = { phase: "pre-commit" };
 
   try {
     const oauth = dependencies.createOAuth2Client(client, listener.redirectUri);
@@ -452,12 +493,17 @@ export async function runLogin(options?: {
       clientId: client.clientId,
       now: dependencies.now,
       timeoutMs: dependencies.timeoutMs,
+      lifecycle,
     });
   } catch (error) {
     if (error instanceof MCPError) throw error;
     throw loginFailure("login_initialization_failed");
   } finally {
-    await listener.close();
+    try {
+      await listener.close();
+    } catch (error) {
+      if (lifecycle.phase === "pre-commit") throw error;
+    }
   }
 }
 

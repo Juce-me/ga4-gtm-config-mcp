@@ -7,13 +7,29 @@ import {
   writeFileSync,
 } from "node:fs";
 import { request } from "node:http";
+import type { Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { openAsyncMock } = vi.hoisted(() => ({
+const { createServerMock, createdServers, openAsyncMock } = vi.hoisted(() => ({
+  createServerMock: vi.fn(),
+  createdServers: [] as unknown[],
   openAsyncMock: vi.fn(),
 }));
+
+vi.mock("node:http", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:http")>();
+  createServerMock.mockImplementation(() => {
+    const server = actual.createServer();
+    createdServers.push(server);
+    return server;
+  });
+  return {
+    ...actual,
+    createServer: createServerMock,
+  };
+});
 
 vi.mock("node:fs/promises", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:fs/promises")>();
@@ -86,11 +102,19 @@ function deferred<T>(): {
 
 afterEach(async () => {
   vi.restoreAllMocks();
+  const actualHttp = await vi.importActual<typeof import("node:http")>("node:http");
   const actualFsPromises = await vi.importActual<typeof import("node:fs/promises")>(
     "node:fs/promises",
   );
   openAsyncMock.mockReset();
   openAsyncMock.mockImplementation(actualFsPromises.open);
+  createdServers.splice(0);
+  createServerMock.mockReset();
+  createServerMock.mockImplementation(() => {
+    const server = actualHttp.createServer();
+    createdServers.push(server);
+    return server;
+  });
   for (const directory of temporaryDirectories.splice(0)) {
     try {
       chmodSync(directory, 0o700);
@@ -666,6 +690,115 @@ describe("runLogin", () => {
     if (browserOutcome?.status === "fulfilled") {
       expectNoStoreResponse(browserOutcome.value, 200, SUCCESS_BODY);
     }
+    expect(JSON.parse(readFileSync(fixture.tokenPath, "utf8"))).toEqual({
+      refresh_token: REFRESH_TOKEN,
+      granted_scopes: [...REQUIRED_SCOPES],
+      client_id: CLIENT_ID,
+      obtained_at: OBTAINED_AT,
+    });
+  });
+
+  it("lets the token writer decide after a real listener error during persistence", async () => {
+    const actualFsPromises = await vi.importActual<typeof import("node:fs/promises")>(
+      "node:fs/promises",
+    );
+    const persistenceStarted = deferred<void>();
+    const releasePersistence = deferred<void>();
+    openAsyncMock.mockImplementationOnce(async (...args: unknown[]) => {
+      persistenceStarted.resolve(undefined);
+      await releasePersistence.promise;
+      return actualFsPromises.open(
+        ...(args as Parameters<typeof actualFsPromises.open>),
+      );
+    });
+    const fixture = createFixture();
+    const originalBytes = `${JSON.stringify({
+      refresh_token: "existing-refresh-token-placeholder",
+      granted_scopes: [...REQUIRED_SCOPES],
+      client_id: CLIENT_ID,
+      obtained_at: "2026-01-02T03:04:05.000Z",
+    })}\n`;
+    writeFileSync(fixture.tokenPath, originalBytes, {
+      encoding: "utf8",
+      mode: 0o600,
+    });
+    const oauth = createOAuthHarness();
+    let browserResponse: Promise<HttpResponse> | undefined;
+    const login = runLogin({
+      env: fixture.env,
+      dependencies: {
+        createOAuth2Client: oauth.createOAuth2Client,
+        onAuthorizationUrl(url) {
+          browserResponse = sendHttpRequest(callbackUrlFromAuthorizationUrl(url));
+        },
+        now: () => new Date(OBTAINED_AT),
+        timeoutMs: 1_000,
+      },
+    });
+    const loginOutcome = login.then(
+      (value) => ({ status: "fulfilled" as const, value }),
+      (error: unknown) => ({ status: "rejected" as const, error }),
+    );
+
+    await persistenceStarted.promise;
+    const listener = createdServers.at(-1) as Server | undefined;
+    if (!listener) throw new Error("Expected a real loopback listener");
+    listener.emit("error", new Error("injected listener error"));
+    releasePersistence.resolve(undefined);
+    const outcome = await loginOutcome;
+    if (browserResponse !== undefined) {
+      await Promise.allSettled([browserResponse]);
+    }
+
+    expect(outcome).toEqual({
+      status: "fulfilled",
+      value: {
+        tokenPath: fixture.tokenPath,
+        grantedScopes: [...REQUIRED_SCOPES],
+      },
+    });
+    expect(readFileSync(fixture.tokenPath, "utf8")).not.toBe(originalBytes);
+    expect(JSON.parse(readFileSync(fixture.tokenPath, "utf8"))).toEqual({
+      refresh_token: REFRESH_TOKEN,
+      granted_scopes: [...REQUIRED_SCOPES],
+      client_id: CLIENT_ID,
+      obtained_at: OBTAINED_AT,
+    });
+  });
+
+  it("does not let listener close failure override a committed login", async () => {
+    const fixture = createFixture();
+    const oauth = createOAuthHarness();
+    let browserResponse: Promise<HttpResponse> | undefined;
+    const login = runLogin({
+      env: fixture.env,
+      dependencies: {
+        createOAuth2Client: oauth.createOAuth2Client,
+        onAuthorizationUrl(url) {
+          const listener = createdServers.at(-1) as Server | undefined;
+          if (!listener) throw new Error("Expected a real loopback listener");
+          const realClose = listener.close.bind(listener);
+          vi.spyOn(listener, "close").mockImplementation(((
+            callback?: (error?: Error) => void,
+          ) => realClose(() => {
+            callback?.(new Error("injected listener close failure"));
+          })) as typeof listener.close);
+          browserResponse = sendHttpRequest(callbackUrlFromAuthorizationUrl(url));
+        },
+        now: () => new Date(OBTAINED_AT),
+        timeoutMs: 1_000,
+      },
+    });
+
+    const result = await login;
+    const response = await browserResponse;
+
+    expect(result).toEqual({
+      tokenPath: fixture.tokenPath,
+      grantedScopes: [...REQUIRED_SCOPES],
+    });
+    expect(response).toBeDefined();
+    if (response) expectNoStoreResponse(response, 200, SUCCESS_BODY);
     expect(JSON.parse(readFileSync(fixture.tokenPath, "utf8"))).toEqual({
       refresh_token: REFRESH_TOKEN,
       granted_scopes: [...REQUIRED_SCOPES],

@@ -1,7 +1,9 @@
 import {
   chmodSync,
   existsSync,
+  linkSync,
   lstatSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
@@ -16,6 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   chmodAsyncMock,
+  lstatAsyncMock,
   mkdirSyncMock,
   openAsyncMock,
   openSyncMock,
@@ -23,6 +26,7 @@ const {
   renameMock,
 } = vi.hoisted(() => ({
   chmodAsyncMock: vi.fn(),
+  lstatAsyncMock: vi.fn(),
   mkdirSyncMock: vi.fn(),
   openAsyncMock: vi.fn(),
   openSyncMock: vi.fn(),
@@ -46,11 +50,13 @@ vi.mock("node:fs", async (importOriginal) => {
 vi.mock("node:fs/promises", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:fs/promises")>();
   chmodAsyncMock.mockImplementation(actual.chmod);
+  lstatAsyncMock.mockImplementation(actual.lstat);
   openAsyncMock.mockImplementation(actual.open);
   renameMock.mockImplementation(actual.rename);
   return {
     ...actual,
     chmod: chmodAsyncMock,
+    lstat: lstatAsyncMock,
     open: openAsyncMock,
     rename: renameMock,
   };
@@ -180,6 +186,55 @@ describe("resolveUserOAuthPaths", () => {
       clientSecretsPath: "/configured/client.json",
       tokenPath: "/configured/token.json",
     });
+  });
+
+  it.each([
+    ["the exact same path", (path: string) => path],
+    ["a normalized lexical alias", (path: string) => `${dirname(path)}/unused/../client.json`],
+  ])("rejects %s for client secrets and token storage", (_name, tokenPathFor) => {
+    const clientSecretsPath = join(makeTempDir(), "client.json");
+    const tokenPath = tokenPathFor(clientSecretsPath);
+
+    const error = capturePermissionDenied(() => resolveUserOAuthPaths({
+      GOOGLE_OAUTH_CLIENT_SECRETS: clientSecretsPath,
+      GOOGLE_OAUTH_TOKEN_PATH: tokenPath,
+    }));
+
+    expect(error).toMatchObject({ details: { reason: "oauth_paths_not_distinct" } });
+    expect(JSON.stringify(error)).not.toContain(clientSecretsPath);
+  });
+
+  it("rejects existing hard-linked client and token paths", () => {
+    const dir = makeTempDir();
+    const clientSecretsPath = join(dir, "client.json");
+    const tokenPath = join(dir, "token.json");
+    writeJson(clientSecretsPath, desktopClientDocument());
+    linkSync(clientSecretsPath, tokenPath);
+
+    const error = capturePermissionDenied(() => resolveUserOAuthPaths({
+      GOOGLE_OAUTH_CLIENT_SECRETS: clientSecretsPath,
+      GOOGLE_OAUTH_TOKEN_PATH: tokenPath,
+    }));
+
+    expect(error).toMatchObject({ details: { reason: "oauth_paths_not_distinct" } });
+  });
+
+  it("rejects parent-symlink aliases that resolve to the same destination", () => {
+    const root = makeTempDir();
+    const realParent = join(root, "real");
+    const aliasedParent = join(root, "alias");
+    mkdirSync(realParent, { mode: 0o700 });
+    symlinkSync(realParent, aliasedParent, "dir");
+    const clientSecretsPath = join(realParent, "client.json");
+    const tokenPath = join(aliasedParent, "client.json");
+    writeJson(clientSecretsPath, desktopClientDocument());
+
+    const error = capturePermissionDenied(() => resolveUserOAuthPaths({
+      GOOGLE_OAUTH_CLIENT_SECRETS: clientSecretsPath,
+      GOOGLE_OAUTH_TOKEN_PATH: tokenPath,
+    }));
+
+    expect(error).toMatchObject({ details: { reason: "oauth_paths_not_distinct" } });
   });
 });
 
@@ -391,6 +446,23 @@ describe("OAuth client loading", () => {
     expect(loaded.tokenPath).toBe(tokenPath);
     expect(loaded.auth.credentials).toEqual({ refresh_token: REFRESH_TOKEN });
   });
+
+  it("rejects colliding credential inodes before runtime token parsing", () => {
+    const dir = makeTempDir();
+    const clientSecretsPath = join(dir, "client.json");
+    const tokenPath = join(dir, "token.json");
+    writeJson(clientSecretsPath, desktopClientDocument());
+    linkSync(clientSecretsPath, tokenPath);
+
+    const error = capturePermissionDenied(() => loadUserOAuth({
+      GOOGLE_OAUTH_CLIENT_SECRETS: clientSecretsPath,
+      GOOGLE_OAUTH_TOKEN_PATH: tokenPath,
+    }));
+
+    expect(error).toMatchObject({ details: { reason: "oauth_paths_not_distinct" } });
+    expect(JSON.stringify(error)).not.toContain(CLIENT_ID);
+    expect(JSON.stringify(error)).not.toContain(CLIENT_SECRET);
+  });
 });
 
 describe("writeStoredUserOAuthToken", () => {
@@ -527,6 +599,114 @@ describe("writeStoredUserOAuthToken", () => {
     expect(JSON.parse(readFileSync(tokenPath, "utf8"))).toEqual(previous);
   });
 
+  it("rejects an invalid temporary inode before rename and preserves prior bytes", async () => {
+    const actualFsPromises = await vi.importActual<typeof import("node:fs/promises")>(
+      "node:fs/promises",
+    );
+    const tokenPath = join(makeTempDir(), "token.json");
+    const originalBytes = `${JSON.stringify(
+      storedToken({ obtained_at: "2026-07-27T12:34:56.000Z" }),
+    )}\n`;
+    writeFileSync(tokenPath, originalBytes, { encoding: "utf8", mode: 0o600 });
+    openAsyncMock.mockImplementationOnce(async (...args: unknown[]) => {
+      const handle = await actualFsPromises.open(
+        ...(args as Parameters<typeof actualFsPromises.open>),
+      );
+      vi.spyOn(handle, "stat").mockResolvedValue({
+        isFile: () => true,
+        mode: 0o100644n,
+      } as Awaited<ReturnType<typeof handle.stat>>);
+      return handle;
+    });
+
+    const error = await captureAsyncPermissionDenied(() =>
+      writeStoredUserOAuthToken(
+        tokenPath,
+        storedToken({ refresh_token: "replacement-token-placeholder" }),
+      ),
+    );
+
+    expect(error).toMatchObject({
+      details: { reason: "token_temporary_verification_failed" },
+    });
+    expect(readFileSync(tokenPath, "utf8")).toBe(originalBytes);
+    expect(renameMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects a swapped temporary pathname before rename and preserves prior bytes", async () => {
+    const actualFsPromises = await vi.importActual<typeof import("node:fs/promises")>(
+      "node:fs/promises",
+    );
+    const tokenPath = join(makeTempDir(), "token.json");
+    const originalBytes = `${JSON.stringify(
+      storedToken({ obtained_at: "2026-07-27T12:34:56.000Z" }),
+    )}\n`;
+    writeFileSync(tokenPath, originalBytes, { encoding: "utf8", mode: 0o600 });
+    openAsyncMock.mockImplementationOnce(async (...args: unknown[]) => {
+      const candidatePath = String(args[0]);
+      const handle = await actualFsPromises.open(
+        ...(args as Parameters<typeof actualFsPromises.open>),
+      );
+      const realStat = handle.stat.bind(handle);
+      vi.spyOn(handle, "stat").mockImplementation(async () => {
+        const status = await realStat({ bigint: true });
+        rmSync(candidatePath);
+        writeFileSync(candidatePath, "swapped temporary file", {
+          encoding: "utf8",
+          mode: 0o600,
+        });
+        return status;
+      });
+      return handle;
+    });
+
+    const error = await captureAsyncPermissionDenied(() =>
+      writeStoredUserOAuthToken(
+        tokenPath,
+        storedToken({ refresh_token: "replacement-token-placeholder" }),
+      ),
+    );
+
+    expect(error).toMatchObject({
+      details: { reason: "token_temporary_verification_failed" },
+    });
+    expect(readFileSync(tokenPath, "utf8")).toBe(originalBytes);
+    expect(renameMock).not.toHaveBeenCalled();
+  });
+
+  it("does not report failure after rename commits the replacement", async () => {
+    const actualFsPromises = await vi.importActual<typeof import("node:fs/promises")>(
+      "node:fs/promises",
+    );
+    const tokenPath = join(makeTempDir(), "token.json");
+    const replacement = storedToken({
+      refresh_token: "replacement-token-placeholder",
+      obtained_at: "2026-07-29T12:34:56.000Z",
+    });
+    writeJson(tokenPath, storedToken({ obtained_at: "2026-07-27T12:34:56.000Z" }));
+    let renameCommitted = false;
+    renameMock.mockImplementationOnce(async (source, destination) => {
+      await actualFsPromises.rename(source, destination);
+      renameCommitted = true;
+    });
+    lstatAsyncMock.mockImplementation(async (...args: unknown[]) => {
+      if (renameCommitted && String(args[0]) === tokenPath) {
+        throw new Error("post-rename path lookup failed");
+      }
+      return actualFsPromises.lstat(
+        ...(args as Parameters<typeof actualFsPromises.lstat>),
+      );
+    });
+
+    try {
+      await expect(writeStoredUserOAuthToken(tokenPath, replacement)).resolves.toBeUndefined();
+    } finally {
+      lstatAsyncMock.mockImplementation(actualFsPromises.lstat);
+    }
+
+    expect(JSON.parse(readFileSync(tokenPath, "utf8"))).toEqual(replacement);
+  });
+
   it("cleans up its temporary file when rename fails", async () => {
     const dir = makeTempDir();
     const tokenPath = join(dir, "token.json");
@@ -616,6 +796,7 @@ describe("writeStoredUserOAuthToken", () => {
 
 afterEach(() => {
   chmodAsyncMock.mockClear();
+  lstatAsyncMock.mockClear();
   mkdirSyncMock.mockClear();
   openAsyncMock.mockClear();
   openSyncMock.mockClear();

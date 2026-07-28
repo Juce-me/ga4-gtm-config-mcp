@@ -15,7 +15,10 @@ Fresh automated verification on 2026-07-28 produced these results:
 
 - `npm run typecheck`: exited `0`.
 - `npm run build`: exited `0`.
-- `npm test`: exited `0`; 38 test files and 222 tests passed.
+- `npm test`: exited `0`; 38 test files and 232 tests passed.
+- The focused OAuth run exited `0`; 90 tests across `tests/auth.test.ts`,
+  `tests/auth.userOAuth.test.ts`, and `tests/cli.login.test.ts` passed, including real
+  loopback-listener coverage.
 - The focused safety and server-contract run exited `0`; 46 tests across the nine
   `src/safety/` areas passed, and the server bootstrap test confirmed the exact 12-tool
   catalog and safe metadata (47 tests total across 10 files).
@@ -39,7 +42,7 @@ performed — pending operator acceptance with private local values**. No live w
 publish was performed. The token file's real mode, stored key names, client-ID equality,
 timestamp, and granted scopes therefore were not manually inspected.
 
-The implementation materially diverged from the first-pass mechanics in three hardening
+The implementation materially diverged from the first-pass mechanics in four hardening
 rounds:
 
 - Descriptor-safe token I/O added no-follow regular-file reads, exclusive temporary-file
@@ -49,6 +52,13 @@ rounds:
   five-minute deadline from persisting credentials.
 - Commit linearization lets only one valid callback claim the persistence phase and
   prevents the timeout and callback paths from racing the final token replacement.
+- Final review hardening rejects normalized-path and existing-inode collisions between the
+  Desktop client JSON and token destination before login or runtime loading.
+- Temporary-token regular-file identity and exact mode are verified before rename; successful
+  same-directory rename is now the no-fail persistence commit point.
+- Login now models explicit pre-commit, committing, and committed phases. Once persistence
+  starts, only the token writer determines the result, and listener, browser, or cleanup
+  failures cannot override a committed replacement.
 
 Task 6 reviewed every changed canonical setup document against all four
 `docs/AGENTS.md` dimensions: UI/UX wording and flow, backend/API correctness,
@@ -63,8 +73,9 @@ contact; none was invented as part of this feature.
 Current for the shipped implementation, canonical setup documentation, and fresh automated
 verification above. The architecture, fixed decisions, security behavior, changed-file
 inventory, expected behavior, and automated acceptance criteria remain accurate, subject to
-the descriptor-safe I/O, timeout-invalidation, and commit-linearization hardening summarized
-in **Outcome**.
+the distinct-path checks, descriptor-safe I/O, pre-rename inode verification,
+timeout-invalidation, no-fail rename commit point, and explicit login lifecycle hardening
+summarized in **Outcome**.
 
 Credentialed behavior is not yet operator-accepted. An eligible Internal or In-production
 External consent screen, a private Desktop OAuth client, and private GA4/GTM resources are

@@ -8,7 +8,7 @@ import {
 } from "node:fs";
 import { lstat, open, rename, unlink, type FileHandle } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-import { dirname, isAbsolute, join } from "node:path";
+import { dirname, isAbsolute, join, normalize } from "node:path";
 import { google } from "googleapis";
 import { z } from "zod";
 import { MCPError } from "../utils/errors.js";
@@ -174,6 +174,48 @@ function isMissingFileError(error: unknown): boolean {
   return isRecord(error) && error.code === "ENOENT";
 }
 
+function existingRegularFileIdentity(
+  path: string,
+): { dev: bigint; ino: bigint } | undefined {
+  let descriptor: number | undefined;
+  try {
+    descriptor = openSync(
+      path,
+      constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+    );
+    const status = fstatSync(descriptor, { bigint: true });
+    if (!status.isFile()) return undefined;
+    return { dev: status.dev, ino: status.ino };
+  } catch {
+    return undefined;
+  } finally {
+    if (descriptor !== undefined) {
+      try {
+        closeSync(descriptor);
+      } catch {
+        permissionDenied("oauth_path_identity_unavailable");
+      }
+    }
+  }
+}
+
+function assertUserOAuthPathsDistinct(paths: UserOAuthPaths): void {
+  if (normalize(paths.clientSecretsPath) === normalize(paths.tokenPath)) {
+    permissionDenied("oauth_paths_not_distinct");
+  }
+
+  const clientIdentity = existingRegularFileIdentity(paths.clientSecretsPath);
+  const tokenIdentity = existingRegularFileIdentity(paths.tokenPath);
+  if (
+    clientIdentity !== undefined
+    && tokenIdentity !== undefined
+    && clientIdentity.dev === tokenIdentity.dev
+    && clientIdentity.ino === tokenIdentity.ino
+  ) {
+    permissionDenied("oauth_paths_not_distinct");
+  }
+}
+
 async function enforcePrivateDirectoryMode(directory: string): Promise<void> {
   let handle: FileHandle | undefined;
   try {
@@ -284,7 +326,9 @@ export function resolveUserOAuthPaths(
     return permissionDenied("token_path_not_absolute");
   }
 
-  return { clientSecretsPath, tokenPath };
+  const paths = { clientSecretsPath, tokenPath };
+  assertUserOAuthPathsDistinct(paths);
+  return paths;
 }
 
 export function readDesktopOAuthClient(path: string): DesktopOAuthClient {
@@ -370,16 +414,23 @@ export async function writeStoredUserOAuthToken(
     await handle.chmod(0o600);
     await handle.writeFile(`${JSON.stringify(value)}\n`, "utf8");
     await handle.sync();
+    const descriptorStatus = await handle.stat({ bigint: true });
+    const candidateStatus = await lstat(temporaryPath, { bigint: true });
+    if (
+      !descriptorStatus.isFile()
+      || !candidateStatus.isFile()
+      || descriptorStatus.dev !== candidateStatus.dev
+      || descriptorStatus.ino !== candidateStatus.ino
+      || (descriptorStatus.mode & 0o777n) !== 0o600n
+      || (candidateStatus.mode & 0o777n) !== 0o600n
+    ) {
+      permissionDenied("token_temporary_verification_failed");
+    }
     await handle.close();
     handle = undefined;
 
     await rename(temporaryPath, tokenPath);
     temporaryPath = undefined;
-
-    const finalStatus = await lstat(tokenPath);
-    if (!finalStatus.isFile() || (finalStatus.mode & 0o777) !== 0o600) {
-      permissionDenied("token_destination_verification_failed");
-    }
   } catch (error) {
     await removeTemporaryFile(handle, temporaryPath);
     if (error instanceof MCPError) throw error;

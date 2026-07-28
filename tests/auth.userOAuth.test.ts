@@ -16,12 +16,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   chmodAsyncMock,
+  mkdirSyncMock,
   openAsyncMock,
   openSyncMock,
   readFileSyncMock,
   renameMock,
 } = vi.hoisted(() => ({
   chmodAsyncMock: vi.fn(),
+  mkdirSyncMock: vi.fn(),
   openAsyncMock: vi.fn(),
   openSyncMock: vi.fn(),
   readFileSyncMock: vi.fn(),
@@ -30,10 +32,12 @@ const {
 
 vi.mock("node:fs", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:fs")>();
+  mkdirSyncMock.mockImplementation(actual.mkdirSync);
   openSyncMock.mockImplementation(actual.openSync);
   readFileSyncMock.mockImplementation(actual.readFileSync);
   return {
     ...actual,
+    mkdirSync: mkdirSyncMock,
     openSync: openSyncMock,
     readFileSync: readFileSyncMock,
   };
@@ -423,6 +427,27 @@ describe("writeStoredUserOAuthToken", () => {
     }
   });
 
+  it("keeps group and world masking while clearing owner masking for parent creation", async () => {
+    const actualFs = await vi.importActual<typeof import("node:fs")>("node:fs");
+    const root = makeTempDir();
+    const parent = join(root, "oauth");
+    const tokenPath = join(parent, "token.json");
+    const probePath = join(root, "mask-probe");
+    mkdirSyncMock.mockImplementationOnce((path, options) => {
+      actualFs.writeFileSync(probePath, "probe", { mode: 0o777 });
+      return actualFs.mkdirSync(path, options);
+    });
+    const previousUmask = process.umask(0o777);
+    try {
+      await writeStoredUserOAuthToken(tokenPath, storedToken());
+    } finally {
+      process.umask(previousUmask);
+    }
+
+    expect(statSync(probePath).mode & 0o777).toBe(0o700);
+    expect(statSync(parent).mode & 0o777).toBe(0o700);
+  });
+
   it("writes a regular final file with mode 0600", async () => {
     const tokenPath = join(makeTempDir(), "token.json");
 
@@ -584,6 +609,7 @@ describe("writeStoredUserOAuthToken", () => {
 
 afterEach(() => {
   chmodAsyncMock.mockClear();
+  mkdirSyncMock.mockClear();
   openAsyncMock.mockClear();
   openSyncMock.mockClear();
   readFileSyncMock.mockClear();

@@ -136,13 +136,13 @@ The payload never includes a credential path, token value, client secret, or raw
 
 ### Direct login failure
 
-When `npm run login` fails, the command exits nonzero and writes only:
+When `npm run login` fails, the command exits nonzero and its final diagnostic is the generic, secret-safe line:
 
 ```text
 User OAuth login failed.
 ```
 
-It deliberately does not print the internal stable reason or raw provider error. Check both absolute paths and the Desktop-client file, then retry the browser flow. A timeout, rejected consent, invalid callback, incomplete scope grant, missing refresh token, or local token-write failure all use this same public CLI message.
+An authorization URL may already have appeared before a later failure. The final diagnostic deliberately does not print the internal stable reason or raw provider error. Check both absolute paths and the Desktop-client file, then retry the browser flow. A timeout, rejected consent, invalid callback, incomplete scope grant, missing refresh token, or local token-write failure all use this same public CLI message.
 
 ### Stored grant lacks a required scope
 

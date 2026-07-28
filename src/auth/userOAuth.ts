@@ -1,5 +1,5 @@
-import { constants, lstatSync, readFileSync } from "node:fs";
-import { lstat, mkdir, open, rename, unlink, type FileHandle } from "node:fs/promises";
+import { closeSync, constants, fstatSync, openSync, readFileSync } from "node:fs";
+import { chmod, lstat, mkdir, open, rename, unlink, type FileHandle } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { dirname, isAbsolute, join } from "node:path";
 import { google } from "googleapis";
@@ -49,30 +49,43 @@ function isNonBlankString(value: unknown): value is string {
 }
 
 function readRegularJson(path: string, prefix: "client_secrets" | "token"): unknown {
-  let status;
+  let descriptor: number;
   try {
-    status = lstatSync(path);
-  } catch {
-    return permissionDenied(`${prefix}_unreadable`);
-  }
-
-  if (!status.isFile()) {
-    return permissionDenied(
-      prefix === "client_secrets" ? "client_secrets_not_regular" : "token_not_regular",
+    descriptor = openSync(
+      path,
+      constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
     );
-  }
-
-  let contents: string;
-  try {
-    contents = readFileSync(path, "utf8");
-  } catch {
+  } catch (error) {
+    if (isRecord(error) && error.code === "ELOOP") {
+      return permissionDenied(
+        prefix === "client_secrets" ? "client_secrets_not_regular" : "token_not_regular",
+      );
+    }
     return permissionDenied(`${prefix}_unreadable`);
   }
 
   try {
-    return JSON.parse(contents) as unknown;
-  } catch {
-    return permissionDenied(`${prefix}_invalid_json`);
+    const status = fstatSync(descriptor);
+    if (!status.isFile()) {
+      return permissionDenied(
+        prefix === "client_secrets" ? "client_secrets_not_regular" : "token_not_regular",
+      );
+    }
+    const contents = readFileSync(descriptor, "utf8");
+    try {
+      return JSON.parse(contents) as unknown;
+    } catch {
+      return permissionDenied(`${prefix}_invalid_json`);
+    }
+  } catch (error) {
+    if (error instanceof MCPError) throw error;
+    return permissionDenied(`${prefix}_unreadable`);
+  } finally {
+    try {
+      closeSync(descriptor);
+    } catch {
+      permissionDenied(`${prefix}_unreadable`);
+    }
   }
 }
 
@@ -152,6 +165,38 @@ function serializableToken(token: StoredUserOAuthToken): StoredUserOAuthToken {
 
 function isMissingFileError(error: unknown): boolean {
   return isRecord(error) && error.code === "ENOENT";
+}
+
+async function ensurePrivateParent(parent: string): Promise<void> {
+  const missingDirectories: string[] = [];
+  let cursor = parent;
+
+  while (true) {
+    try {
+      const status = await lstat(cursor);
+      if (!status.isDirectory()) permissionDenied("token_parent_not_directory");
+      break;
+    } catch (error) {
+      if (error instanceof MCPError) throw error;
+      if (!isMissingFileError(error)) permissionDenied("token_parent_unavailable");
+      missingDirectories.unshift(cursor);
+      const ancestor = dirname(cursor);
+      if (ancestor === cursor) permissionDenied("token_parent_unavailable");
+      cursor = ancestor;
+    }
+  }
+
+  for (const directory of missingDirectories) {
+    try {
+      await mkdir(directory, { mode: 0o700 });
+    } catch (error) {
+      if (!isRecord(error) || error.code !== "EEXIST") throw error;
+      const status = await lstat(directory);
+      if (!status.isDirectory()) permissionDenied("token_parent_not_directory");
+      continue;
+    }
+    await chmod(directory, 0o700);
+  }
 }
 
 async function removeTemporaryFile(
@@ -260,7 +305,7 @@ export async function writeStoredUserOAuthToken(
   let handle: FileHandle | undefined;
 
   try {
-    await mkdir(parent, { recursive: true, mode: 0o700 });
+    await ensurePrivateParent(parent);
 
     try {
       const destinationStatus = await lstat(tokenPath);
@@ -271,12 +316,14 @@ export async function writeStoredUserOAuthToken(
       if (!isMissingFileError(error)) throw error;
     }
 
-    temporaryPath = join(parent, `.${randomUUID()}.tmp`);
+    const candidatePath = join(parent, `.${randomUUID()}.tmp`);
     handle = await open(
-      temporaryPath,
+      candidatePath,
       constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY,
       0o600,
     );
+    temporaryPath = candidatePath;
+    await handle.chmod(0o600);
     await handle.writeFile(`${JSON.stringify(value)}\n`, "utf8");
     await handle.sync();
     await handle.close();

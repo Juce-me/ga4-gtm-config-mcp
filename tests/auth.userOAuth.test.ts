@@ -1,5 +1,6 @@
 import {
   chmodSync,
+  existsSync,
   lstatSync,
   mkdtempSync,
   readFileSync,
@@ -13,14 +14,29 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { renameMock } = vi.hoisted(() => ({
+const { openAsyncMock, openSyncMock, readFileSyncMock, renameMock } = vi.hoisted(() => ({
+  openAsyncMock: vi.fn(),
+  openSyncMock: vi.fn(),
+  readFileSyncMock: vi.fn(),
   renameMock: vi.fn(),
 }));
 
+vi.mock("node:fs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs")>();
+  openSyncMock.mockImplementation(actual.openSync);
+  readFileSyncMock.mockImplementation(actual.readFileSync);
+  return {
+    ...actual,
+    openSync: openSyncMock,
+    readFileSync: readFileSyncMock,
+  };
+});
+
 vi.mock("node:fs/promises", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:fs/promises")>();
+  openAsyncMock.mockImplementation(actual.open);
   renameMock.mockImplementation(actual.rename);
-  return { ...actual, rename: renameMock };
+  return { ...actual, open: openAsyncMock, rename: renameMock };
 });
 
 import {
@@ -198,15 +214,39 @@ describe("readDesktopOAuthClient", () => {
     expect(JSON.stringify(error)).not.toContain(CLIENT_SECRET);
   });
 
-  it("rejects an unreadable client secrets file", () => {
+  it("rejects a client secrets file when opening it is denied", () => {
     const path = join(makeTempDir(), "client.json");
     writeJson(path, desktopClientDocument());
-    chmodSync(path, 0o000);
+    openSyncMock.mockImplementationOnce(() => {
+      throw Object.assign(new Error("open denied"), { code: "EACCES" });
+    });
 
     const error = capturePermissionDenied(() => readDesktopOAuthClient(path));
 
     expect(error).toMatchObject({ details: { reason: "client_secrets_unreadable" } });
     expect(JSON.stringify(error)).not.toContain(path);
+  });
+
+  it("reads the opened file when its pathname is concurrently replaced by a symlink", async () => {
+    const actualFs = await vi.importActual<typeof import("node:fs")>("node:fs");
+    const dir = makeTempDir();
+    const path = join(dir, "client.json");
+    const replacement = join(dir, "replacement.json");
+    writeJson(path, desktopClientDocument());
+    writeJson(replacement, desktopClientDocument({
+      client_id: OTHER_CLIENT_ID,
+      client_secret: "other-client-secret-placeholder",
+    }));
+    readFileSyncMock.mockImplementationOnce((pathOrDescriptor, options) => {
+      rmSync(path);
+      symlinkSync(replacement, path);
+      return actualFs.readFileSync(pathOrDescriptor, options);
+    });
+
+    expect(readDesktopOAuthClient(path)).toEqual({
+      clientId: CLIENT_ID,
+      clientSecret: CLIENT_SECRET,
+    });
   });
 
   it("rejects a non-regular client secrets path", () => {
@@ -353,6 +393,23 @@ describe("writeStoredUserOAuthToken", () => {
     expect(statSync(dirname(tokenPath)).mode & 0o777).toBe(0o700);
   });
 
+  it("sets every newly created parent component to 0700 under a restrictive umask", async () => {
+    const root = makeTempDir();
+    const firstParent = join(root, "nested");
+    const finalParent = join(firstParent, "oauth");
+    const tokenPath = join(finalParent, "token.json");
+    const previousUmask = process.umask(0o777);
+    try {
+      await writeStoredUserOAuthToken(tokenPath, storedToken());
+      expect(statSync(firstParent).mode & 0o777).toBe(0o700);
+      expect(statSync(finalParent).mode & 0o777).toBe(0o700);
+    } finally {
+      process.umask(previousUmask);
+      if (existsSync(firstParent)) chmodSync(firstParent, 0o700);
+      if (existsSync(finalParent)) chmodSync(finalParent, 0o700);
+    }
+  });
+
   it("writes a regular final file with mode 0600", async () => {
     const tokenPath = join(makeTempDir(), "token.json");
 
@@ -361,6 +418,25 @@ describe("writeStoredUserOAuthToken", () => {
     const status = lstatSync(tokenPath);
     expect(status.isFile()).toBe(true);
     expect(status.mode & 0o777).toBe(0o600);
+  });
+
+  it("replaces an existing token with an exact 0600 file under a restrictive umask", async () => {
+    const tokenPath = join(makeTempDir(), "token.json");
+    const replacement = storedToken({
+      refresh_token: "replacement-token-placeholder",
+      obtained_at: "2026-07-29T12:34:56.000Z",
+    });
+    writeJson(tokenPath, storedToken());
+    chmodSync(tokenPath, 0o600);
+    const previousUmask = process.umask(0o777);
+    try {
+      await writeStoredUserOAuthToken(tokenPath, replacement);
+    } finally {
+      process.umask(previousUmask);
+    }
+
+    expect(lstatSync(tokenPath).mode & 0o777).toBe(0o600);
+    expect(JSON.parse(readFileSync(tokenPath, "utf8"))).toEqual(replacement);
   });
 
   it("stores only the four allowed fields with a trailing newline", async () => {
@@ -416,6 +492,23 @@ describe("writeStoredUserOAuthToken", () => {
     expect(readdirSync(dir)).toEqual([]);
   });
 
+  it("does not unlink an unowned candidate when exclusive open reports a collision", async () => {
+    const dir = makeTempDir();
+    const tokenPath = join(dir, "token.json");
+    let candidatePath = "";
+    openAsyncMock.mockImplementationOnce(async (path) => {
+      candidatePath = String(path);
+      writeFileSync(candidatePath, "unowned sentinel", "utf8");
+      throw Object.assign(new Error("exclusive open collision"), { code: "EEXIST" });
+    });
+
+    await captureAsyncPermissionDenied(() => writeStoredUserOAuthToken(tokenPath, storedToken()));
+
+    expect(candidatePath).not.toBe("");
+    expect(existsSync(candidatePath)).toBe(true);
+    expect(readFileSync(candidatePath, "utf8")).toBe("unowned sentinel");
+  });
+
   it("refuses an existing symlink destination", async () => {
     const dir = makeTempDir();
     const target = join(dir, "target.json");
@@ -444,6 +537,9 @@ describe("writeStoredUserOAuthToken", () => {
 });
 
 afterEach(() => {
+  openAsyncMock.mockClear();
+  openSyncMock.mockClear();
+  readFileSyncMock.mockClear();
   for (const dir of tmpDirs.splice(0)) {
     chmodSync(dir, 0o700);
     rmSync(dir, { recursive: true, force: true });

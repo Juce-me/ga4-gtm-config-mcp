@@ -222,7 +222,7 @@ async function ensurePrivateParent(parent: string): Promise<void> {
   for (const directory of missingDirectories) {
     let created = false;
     let creationError: unknown;
-    const previousUmask = process.umask();
+    const previousUmask = process.umask(0o077);
     process.umask(previousUmask & ~0o700);
     try {
       mkdirSync(directory, { mode: 0o700 });

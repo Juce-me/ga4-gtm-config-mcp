@@ -427,21 +427,28 @@ describe("writeStoredUserOAuthToken", () => {
     }
   });
 
-  it("keeps group and world masking while clearing owner masking for parent creation", async () => {
+  it("avoids the umask getter while preserving group and world masking", async () => {
     const actualFs = await vi.importActual<typeof import("node:fs")>("node:fs");
     const root = makeTempDir();
     const parent = join(root, "oauth");
     const tokenPath = join(parent, "token.json");
     const probePath = join(root, "mask-probe");
-    mkdirSyncMock.mockImplementationOnce((path, options) => {
+    mkdirSyncMock.mockImplementation((path, options) => {
       actualFs.writeFileSync(probePath, "probe", { mode: 0o777 });
       return actualFs.mkdirSync(path, options);
     });
-    const previousUmask = process.umask(0o777);
+    const actualUmask = process.umask.bind(process);
+    const previousUmask = actualUmask(0o777);
+    const umaskSpy = vi.spyOn(process, "umask").mockImplementation((mask?: number) => {
+      if (mask === undefined) throw new Error("process.umask getter invoked");
+      return actualUmask(mask);
+    });
     try {
       await writeStoredUserOAuthToken(tokenPath, storedToken());
     } finally {
-      process.umask(previousUmask);
+      umaskSpy.mockRestore();
+      mkdirSyncMock.mockImplementation(actualFs.mkdirSync);
+      actualUmask(previousUmask);
     }
 
     expect(statSync(probePath).mode & 0o777).toBe(0o700);

@@ -75,10 +75,10 @@ Every artifact must state status, type, and author near the top:
 ```markdown
 Status: planned
 Type: feature
-Author: <name-or-handle>
+Author: <git-user-name>
 ```
 
-`Author` identifies the human responsible for the artifact's current contents. Use a real handle. When an agent edits a human-owned artifact, the human remains the author; the edit is captured in git history, not in this field. Update `Author` only when ownership actually transfers to a different person.
+`Author` identifies the human responsible for the artifact's current contents. Set it to the non-empty output of `git config user.name` in the repository. If that value is unset, ask the user; do not infer a name or hosting-account handle. When an agent edits a human-owned artifact, the human remains the author; the edit is captured in git history, not in this field. Update `Author` only when ownership actually transfers to a different person.
 
 Allowed statuses:
 
@@ -189,4 +189,4 @@ When completing work, update documentation before ending the session:
 
 When a later change makes an executed artifact inaccurate, either update its `Current Accuracy` section or mark it `obsolete`. Do not leave stale plans looking authoritative.
 
-Delete `obsolete` artifacts once the work they describe is no longer being reread for context. Git history preserves the record. Stale plans living next to active ones confuse new contributors more than they help.
+Propose deletion of `obsolete` artifacts once the work they describe is no longer useful as context. Do not delete them unless the user includes deletion in scope. Git history preserves removed records, while stale plans living next to active ones can confuse new contributors.

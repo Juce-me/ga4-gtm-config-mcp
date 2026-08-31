@@ -1,148 +1,126 @@
 # AGENTS.md
 
-Template version: 2026-07-23
+Template version: 2026-08-29
 
 Drop-in operating instructions for coding agents. Read this file before every task.
 
 **Working code only. Finish the job. Plausibility is not correctness.**
 
-This file follows the [AGENTS.md](https://agents.md) open standard (Linux Foundation / Agentic AI Foundation). Claude Code, Codex, Cursor, Windsurf, Copilot, Aider, Devin, Amp read it natively. For tools that look elsewhere, symlink at the project root:
+This file follows the [AGENTS.md](https://agents.md) open standard. At the project root and beside every directory-specific `AGENTS.md`, symlink compatibility files to the local instructions:
 
 ```bash
 ln -s AGENTS.md CLAUDE.md
 ln -s AGENTS.md GEMINI.md
 ```
 
-For any directory-specific `AGENTS.md`, create the same colocated `CLAUDE.md` and `GEMINI.md` symlinks from that subfolder.
-
-When the agent runtime supports Superpowers, install or enable it for the project on first start and invoke `using-superpowers` before ordinary task handling. If Superpowers is unavailable, say so explicitly and continue with this file as the fallback.
+When Superpowers is already available, invoke `using-superpowers` before ordinary task handling and use relevant skills. Do not install tools or create persistent planning artifacts unless the user or project workflow requires them. When `docs/AGENTS.md` is installed, its `docs/agents/` locations override skill-default artifact paths such as `docs/superpowers/`.
 
 ---
 
 ## 0. Non-negotiables
 
-1. **No filler.** Start with the answer or action.
-2. **Disagree when needed.** If the premise is wrong, say so before doing the work.
-3. **Never fabricate.** Read the file, run the command, or say you do not know.
-4. **Stop when materially ambiguous.** Ask instead of silently choosing.
-5. **Touch only what the task requires.** No drive-by refactors or formatting.
-6. **Protect contracts.** Existing architecture, interfaces, migrations, and explicit decisions are requirements unless the user changes them.
-7. **Keep local data local.** Never commit real secrets, emails, IDs, hostnames, usernames, or absolute machine paths. Use placeholders.
-8. **No agent or tool branding in project content.** Do not mention assistants, models, agent workflows, or generation tools in source, docs, comments, commits, or PR text unless the task is specifically about them.
+These rules override later guidance in this file:
+
+1. **No flattery or filler.** Start with the answer or action.
+2. **Disagree with false premises.** Explain the evidence before proceeding.
+3. **Never fabricate.** Read the source, run the command, or state what remains unknown.
+4. **Do not guess through material ambiguity.** Follow the decision rule in section 8.
+5. **Change only what the request requires.** No drive-by fixes, refactors, or formatting.
+6. **Protect existing work and contracts.** Preserve user changes, architecture boundaries, public interfaces, and migration paths unless the user changes them.
+7. **Do not commit sensitive personal or local data.** Use repo-relative paths and placeholders; never commit secrets, tokens, real emails, local machine usernames, hostnames, or production identifiers. A configured Git author name may be used where project documentation requires attribution.
+8. **No agent or tool branding** in branches, commits, PRs, or project content unless explicitly requested.
 
 ---
 
 ## 1. Before editing
 
-- State a one- or two-sentence plan and success criteria.
-- For non-trivial work, use a short numbered plan with a verification step for each item.
-- Read the files you will change and the code or docs that depend on them.
-- Read relevant plans, architecture notes, and postmortems before changing related behavior.
-- Match the repository's existing patterns and public contracts.
-- Surface assumptions that materially affect the result.
-- When two approaches are viable, present both and recommend one before implementing.
+- State the intended outcome, observable acceptance criteria, files in scope, and verification. Use a numbered plan only when the work is non-trivial.
+- Before editing a target file, read the instruction chain from the project root through its directory, including nested `AGENTS.md` files the runtime did not load automatically. Then read the target file and relevant callers or consumers.
+- Check the worktree and preserve unrelated changes. If required work overlaps uncertain user edits, stop and ask.
+- When approaches differ materially, explain the tradeoff and recommend one. Do not add ceremony for trivial, reversible edits.
 
 ---
 
 ## 2. Implementation scope
 
-- Build the smallest complete solution to the stated problem.
-- Do not add speculative features, abstractions, hooks, or configurability.
-- Reuse existing components, utilities, tokens, templates, and conventions.
-- Put shared behavior at the highest applicable shared layer, not in one-off local variants.
-- Do not refactor adjacent working code unless the task requires it.
-- Clean up only the unused code, imports, files, or documentation made obsolete by your own change.
-- Preserve edge cases and architectural constraints even when a shorter implementation is possible.
+- Write the minimum code or documentation that satisfies the request. No speculative features, single-use abstractions, or future-extensibility hooks.
+- Follow established patterns, naming, formatting, and file layout even when you would choose differently in a greenfield project.
+- Reuse existing shared components, styles, tokens, rules, and workflows instead of creating local variants.
+- Handle failures that can actually occur. Fix root causes rather than suppressing symptoms.
+- Clean up only imports, variables, functions, or files made obsolete by your own change. Mention unrelated dead code instead of deleting it.
+- Before finishing, inspect the diff and remove every changed line that does not trace to the request.
 
 ---
 
 ## 3. Files and instruction hierarchy
 
-- Follow the nearest `AGENTS.md`; deeper files may add constraints but must not weaken parent rules.
-- Keep colocated `CLAUDE.md` and `GEMINI.md` symlinked to the local `AGENTS.md`.
-- Put new files in the repository's established folders. If no layout exists, use `src/`, `tests/`, `docs/`, `scripts/`, and `assets/` as appropriate.
-- Do not create empty directories or placeholder files.
-- Follow `docs/AGENTS.md` for agent work artifacts and `docs/postmortem/AGENTS.md` or legacy `postmortem/AGENTS.md` for postmortems when present.
+- Put reusable rules at the highest applicable `AGENTS.md`. A child file may add stricter local constraints; it inherits parent naming and location rules unless the parent explicitly delegates a separate schema.
+- Keep colocated `CLAUDE.md` and `GEMINI.md` files symlinked to the local `AGENTS.md`.
+- Follow the project's established layout. If none exists, use `src/` for sources, `tests/` for tests, `docs/` for documentation, `scripts/` for tooling, and `assets/` for static assets.
+- Create a directory only with its first real file. Do not add empty folders, `.keep` files, placeholder READMEs, or speculative scaffolding.
+- Keep tests, fixtures, generated test data, and scratch work inside the repository. Use `tmp/` only when it is gitignored; use an external temporary path only when a tool requires it.
 
 ---
 
 ## 4. Verification
 
-Define success before implementation, then verify it:
-
-1. Turn vague requests into observable outcomes.
-2. Add or identify a test, script, benchmark, or visual check where practical.
-3. Run the narrowest relevant verification first.
-4. Run the broader affected suite before claiming completion.
-5. Read the complete failure output and fix the cause, not the test.
-6. Update plans, docs, examples, and READMEs to match shipped behavior.
-
-Never report success from a plausible diff alone.
+- Run the relevant tests, lint, type checks, validation scripts, or benchmarks. When behavior can be exercised automatically, add or identify a check that fails without the change and passes with it; otherwise document manual verification. Read complete failures and fix the cause, not the check.
+- For UI work, compare before-and-after screenshots and describe the visible change.
+- Never claim success from a plausible diff. Report the command run and its actual result.
+- Update affected documentation and active work artifacts when behavior, interfaces, layout, or workflow changes. Do not update unrelated docs for completeness.
 
 ---
 
 ## 5. Tools and runtimes
 
-- Prefer running the code to guessing.
-- Use repository-local or pinned runtimes and dependency managers.
-- Python: use an existing `.venv`; create one only when Python work requires it. Never install into system Python.
-- Node: use the repository's pinned runtime and lockfile.
-- Prefer existing CLI tools and repository scripts over ad hoc replacements.
-- Read full logs, errors, and stack traces.
-- For UI changes, verify visually before and after.
+- Prefer running the code and using configured CLI tools over guessing or unauthenticated manual API calls.
+- The verified commands and runtime in section 10 override generic defaults.
+- Use the repository's pinned runtime or local environment. For Python, create `.venv` only when isolation is needed and no workflow exists; never install into unmanaged host Python. For Node, use the pinned runtime manager when configured.
+- Do not request credentials until read-only local checks and safe alternatives are exhausted.
 
 ---
 
 ## 6. Git and session hygiene
 
-- Inspect `git status` before editing and preserve unrelated user changes.
-- Never discard, reset, or overwrite changes you did not create.
-- Keep diffs surgical and reviewable.
-- Use descriptive commit messages with a subject under 72 characters and a body that explains why when needed.
-- Do not add assistant attribution or generated-by trailers.
-- After two failed corrections on the same issue, stop, summarize the evidence, and ask for direction.
-- At the start of a new session, check `https://raw.githubusercontent.com/Juce-me/init_agents_md/main/AGENTS.md` for a newer template. When newer, read `template-migrations.md`, ask before updating, and preserve project-specific sections 10 and 11.
+- Follow the user request and the repository-specific Git workflow in section 10. Do not commit, push, merge, delete, or rewrite history unless that action is in scope.
+- When section 10 defines a tracker and status flow, reference the work item in branches, commits, and change requests, and update its status at the mapped moments.
+- Before a commit, confirm the diff contains no local data or unrelated changes. Use a descriptive subject under 72 characters; add a body when the reason is not clear from the subject. Do not add agent attribution.
+- At the start of a new session, check the upstream [`AGENTS.md`](https://raw.githubusercontent.com/Juce-me/init_agents_md/main/AGENTS.md) template version. If it is newer, inspect the corresponding [`template-migrations.md`](https://raw.githubusercontent.com/Juce-me/init_agents_md/main/docs/template-migrations.md) entries first.
+- Apply only a root-file text update automatically, preserving sections 10 and 11. Get approval before moving files, replacing auxiliary instructions, changing symlinks, editing preserved sections, or resolving collisions. If either version is missing or comparison is uncertain, show the proposed change instead of applying it.
+- Use subagents only when the runtime provides them and the task divides into independent, bounded work. Keep trivial and documentation-only corrections inline, and close completed agents when the runtime supports it.
+- After two failed attempts on the same issue, stop, summarize the evidence, and ask for direction.
 
 ---
 
 ## 7. Communication
 
-- Be direct and concise.
-- Lead with the assessment or result.
-- Separate what existing tools already solve from what custom code still adds.
-- Prefer structural critique over surface polish.
-- When two paths are viable, state the tradeoff and recommend one.
-- Do not hide uncertainty. Say what is unknown and how you will verify it.
+- Use English unless the user asks otherwise. Be direct, concise, and specific.
+- Lead technical judgment with the assessment and the few facts that determine it.
+- Distinguish what existing tools already solve from what custom work would add. Call out a wrong architectural boundary before polishing its implementation.
+- Avoid excessive headings, bullets, repetition, ceremonial closings, and emoji.
 
 ---
 
 ## 8. When to ask
 
-Ask before proceeding when:
+Separate mechanical moves from strategic ones. Ask before proceeding in any of these cases:
 
-- Two plausible interpretations materially change the output.
-- The change affects a versioned, load-bearing, or migration-sensitive contract.
-- Credentials, secrets, production resources, or external approval are required.
-- The stated goal conflicts with the literal request.
+- The move changes the agreed design, plan, or strategy: a new dependency, a scope split, or a deviation from a documented decision.
+- Different interpretations materially change the output.
+- The change affects a load-bearing, versioned, or migration-sensitive contract.
+- The task requires credentials, production access, destructive action, or authority not already granted.
+- The literal request conflicts with the user's stated goal.
 
-Proceed without asking when:
-
-- The change is trivial and reversible.
-- Reading the repository or running a command resolves the ambiguity.
-- The user already answered the question in the current session.
+When none apply, the move is mechanical: verify what you can locally, make the smallest safe, reversible assumption, state it when material, and continue without waiting for approval. If unsure which kind a move is, treat it as strategic and ask.
 
 ---
 
 ## 9. Durable learning
 
-When a correction is likely to recur:
-
-1. Decide whether the instruction was missing or ignored.
-2. Add or tighten one concrete rule in section 11.
-3. Remove duplicate or stale guidance.
-4. Keep the rule specific enough to change future behavior.
-
-For significant regressions or repeated misses, review and update the applicable postmortem workflow before related work.
+- Add or tighten a rule in section 11 only after a user correction that is concrete, likely to recur, and not already covered. Remove stale rules when the underlying issue disappears.
+- For significant misses or regressions, review relevant postmortems before related work. Follow the installed postmortem instructions and keep its index aligned.
+- When creating agent work artifacts, follow `docs/AGENTS.md` if installed. Keep each artifact's status, outcome, plan, and affected documentation aligned with the implementation.
+- Periodically prune rules whose removal would not change agent behavior.
 
 ---
 
@@ -177,9 +155,6 @@ This is an execution layer, not an analytics planner. It must not invent events,
 - Docs: `docs/AGENTS.md` defines agent work artifact rules; agent artifacts live under `docs/agents/features/`, `docs/agents/prompts/`, `docs/agents/bugfixes/`, `docs/agents/reviews/`. `postmortem/` contains the postmortem workflow.
 
 ### Conventions
-- Reusable rules and design guidance belong at the highest applicable `AGENTS.md`; subfolder `AGENTS.md` files are for local constraints only.
-- Keep `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md` aligned at the root and in subfolders; `CLAUDE.md` and `GEMINI.md` should point to the local `AGENTS.md`.
-- Agent work artifacts under `docs/agents/` use the `STATUS-summary.md` (or `STATUS-YYYY-MM-DD-summary.md`) naming defined in `docs/AGENTS.md`. Subfolder `AGENTS.md` files cannot redefine this scheme.
 - ESM module imports include the `.js` suffix (NodeNext resolution requires this even from `.ts` source). Example: `import { readSpec } from "../spec/readSpec.js";`.
 - The `logger` writes to `process.stderr` only — `process.stdout` is reserved for the MCP stdio transport. Do not `console.log` from `src/`.
 - Errors surfaced to MCP tool consumers are `MCPError` instances with one of the 12 codes in `src/utils/errors.ts`. Tools serialize them via `error.toJSON()` and return `{ isError: true }`.

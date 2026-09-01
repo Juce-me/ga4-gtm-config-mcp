@@ -184,6 +184,9 @@ This is an execution layer, not an analytics planner. It must not invent events,
 - Document Google Cloud OAuth-client setup separately from the operator's existing GA4/GTM product permissions; OAuth never grants product access.
 - Use absolute placeholder paths for the Desktop client JSON, token file, Node executable, and server entrypoint in every MCP configuration example.
 - State that `npm run login` requests all runtime scopes and stores a plaintext refresh token at mode `0600`.
+- When running `npm run login`, keep the command active while the operator completes the printed browser OAuth flow; user interaction is expected and is not itself a blocker.
+- Distinguish the current Desktop-client login from the former `gcloud`/ADC flow, where `gcloud` supplied the OAuth client behind the authorization link; confirm which flow the operator wants before opening Google Cloud Console or provisioning credentials.
+- Do not require a runtime Google Cloud project ID for GA4/GTM client calls; ADC supplies credentials, while OAuth scopes and GA4/GTM product permissions control resource access.
 - Describe `INCLUDE_PUBLISH_SCOPE` only as the publish-mode operation gate; it does not alter scope acquisition or bypass publish guards.
 - Never put real project IDs, account IDs, property IDs, container IDs, user emails, OAuth client values, tokens, or machine paths in public repo docs; use placeholders.
 

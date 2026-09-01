@@ -1,65 +1,44 @@
 # Setup overview
 
-This server uses one local Google user OAuth grant. Keep these boundaries separate:
+This is the end-to-end setup order for the local ADC-based server. Keep these boundaries separate:
 
 | Item | Purpose | What it does not do |
-|------|---------|---------------------|
-| Google Cloud project | Owns the OAuth consent configuration, Desktop client, and enabled APIs | Does not grant access to a GA4 property or GTM account/container |
-| OAuth Desktop client | Identifies this local application during browser login | Does not carry GA4/GTM product permissions |
-| Operator's Google user | Authorizes the requested API scopes and performs GA4/GTM operations | Does not gain product access through OAuth |
-| MCP client | Starts `node dist/server.js` and passes private absolute file paths | Is not the Google OAuth client |
+|---|---|---|
+| ADC | Supplies a Google identity and OAuth scopes to Google Auth Library | Does not grant GA4 property or GTM account/container roles |
+| Operator identity | Holds the existing GA4/GTM product permissions | Does not require a runtime Google Cloud project ID |
+| MCP host | Starts the local stdio server | Does not acquire or store Google credentials for the server |
+| Execution spec | Declares reviewed desired state and target resources | Never contains credentials or secret values |
 
-The operator's Google user account must already have the intended permissions in every target GA4 property and GTM account/container. Google OAuth authorizes API use as that user; it does not add the user to either product.
+The server does not read or require a Google Cloud project ID for GA4 Admin or GTM API calls. ADC supplies the identity; OAuth scopes authorize API capabilities; existing GA4/GTM product roles authorize access to the target resources.
 
-## Required flow
+## Setup order
 
-1. In a Google Cloud project, enable the Google Analytics Admin API and Tag Manager API.
-2. Configure the Google Auth Platform audience and create an OAuth client with application type **Desktop app**.
-3. Download the client JSON to a private local path.
-4. Set `GOOGLE_OAUTH_CLIENT_SECRETS` and `GOOGLE_OAUTH_TOKEN_PATH` to absolute paths.
-5. Run `npm run login`, open the printed URL, and authorize with the operator's Google user.
-6. Configure the MCP host with the same two absolute paths.
-7. Run MCP tools against reviewed `*.mcp-execution.yaml` specs.
+1. Confirm the operator identity already has the required GA4 property and GTM account/container roles.
+2. Follow [Google Cloud credentials](google-cloud-credentials.md) to choose an ADC source. For the supported custom-scope user-ADC path, create a Desktop OAuth client for gcloud acquisition only.
+3. Run the canonical local flow and complete browser authorization while the login command remains active:
 
-## Migrate from workload authentication
+   ```bash
+   npm install
+   npm run login -- --client-id-file=/absolute/path/to/oauth-client.json
+   npm run build
+   ```
 
-If an existing MCP launcher still uses the former workload-auth setup:
+4. Configure the [MCP host](mcp-client-configuration.md) with absolute paths to Node and the built server. Leave its environment empty to use well-known local ADC, unless another standard ADC source is required.
+5. Hand the server only reviewed execution-spec paths and target arguments as described in [application project integration](application-project-integration.md).
 
-1. Remove the legacy <code>GOOGLE_APPLICATION&#95;CREDENTIALS</code> entry and every <code>ALLOW_GOOGLE_*</code> entry from the launcher environment.
-2. Complete [Google Cloud OAuth setup](google-cloud-credentials.md) and download a Desktop OAuth client JSON.
-3. Store the Desktop client JSON and token destination at private absolute paths.
-4. Set `GOOGLE_OAUTH_CLIENT_SECRETS` and `GOOGLE_OAUTH_TOKEN_PATH` to those paths.
-5. Run `npm run login` and complete browser consent as the operator whose existing GA4/GTM permissions the server should use.
-6. Restart the MCP host so it drops the old environment and loads the new OAuth files.
+`npm run login` delegates to `gcloud auth application-default login --disable-quota-project`. It requests the complete runtime scope union plus gcloud's required `cloud-platform` scope, writes to gcloud's standard ADC location, and requires browser interaction. The Desktop OAuth client file is consumed by gcloud during acquisition only; the runtime server never reads it. Bare `npm run login` uses gcloud's built-in client and is best-effort for custom Analytics scopes. `cloud-platform` remains in the gcloud scope list because gcloud requires it for this custom-scope user-ADC flow; runtime mode scope arrays remain unchanged.
 
-Do not leave both credential models configured. The current runtime reads only the two user-OAuth paths.
+## Migration from removed OAuth-path variables
 
-Read the focused guides in order:
-
-- [Google Cloud OAuth setup](google-cloud-credentials.md)
-- [User OAuth login](user-oauth-login.md)
-- [MCP client configuration](mcp-client-configuration.md)
-- [Application project integration](application-project-integration.md)
+Delete `GOOGLE_OAUTH_CLIENT_SECRETS` and `GOOGLE_OAUTH_TOKEN_PATH` from existing MCP-host configuration, then restart the host after completing the ADC flow above. Do not replace them with a custom-client file path: `GOOGLE_APPLICATION_CREDENTIALS` is optional and accepts only a valid standard ADC credential file at an absolute path.
 
 ## Security boundary
 
-The downloaded client JSON contains an OAuth client secret, and the generated token file contains a plaintext refresh token. Keep both outside version control, restrict access to the operator, and never paste either into docs, specs, issue reports, logs, or MCP tool arguments.
+Keep acquisition credentials and any alternate ADC files outside application repositories and version control. The execution spec declares reviewed desired state and target resources; it never contains credentials or secret values. `INCLUDE_PUBLISH_SCOPE=1` is a separately configured operation gate, not a scope-acquisition switch and not a bypass for the other publish guards.
 
-Login requests the complete scope set needed for read, write, container-version, and publish modes. Google consent is therefore broader than a read-only session even when publishing is operationally disabled. `INCLUDE_PUBLISH_SCOPE` is a separate runtime gate: leaving it unset blocks publish mode, but it does not remove the publish scope from the stored grant.
+## Focused guides
 
-## Audience and token lifetime
-
-- **Internal** is available only when the Cloud project belongs to a Google Workspace or Cloud Identity organization and the intended user belongs to that organization.
-- **External** in **Testing** requires test users for these non-basic GA4/GTM scopes. Their authorizations and refresh tokens expire after seven days.
-- A durable one-time local login therefore requires either an eligible **Internal** app or an **External** app configured for **In production**.
-- Durable does not mean permanent. Revocation, inactivity, account policy, and other Google conditions can still invalidate a refresh token.
-- Verification requirements, warning screens, and user caps depend on the audience, publishing status, and requested scopes. Follow Google's current policy for the intended users.
-
-Current Google references:
-
-- [OAuth overview and refresh-token expiration](https://developers.google.com/identity/protocols/oauth2)
-- [OAuth app audience and seven-day Testing behavior](https://support.google.com/cloud/answer/15549945)
-
-## Placeholder policy
-
-Public examples use placeholders only. Never add a real OAuth client ID or secret, refresh token, email, Google Cloud project ID, GA4 account/property/stream ID, GTM account/container/workspace/version ID, or machine-specific path.
+- [Google Cloud credentials](google-cloud-credentials.md): ADC source precedence and optional custom-client acquisition.
+- [User OAuth login](user-oauth-login.md): browser authorization, gcloud warnings, recovery, and safe verification.
+- [MCP client configuration](mcp-client-configuration.md): local stdio host configuration.
+- [Application project integration](application-project-integration.md): reviewed handoff from an application repository.

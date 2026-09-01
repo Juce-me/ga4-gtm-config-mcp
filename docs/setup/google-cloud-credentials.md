@@ -1,68 +1,49 @@
-# Google Cloud OAuth setup
+# Google Cloud credentials
 
-This guide creates the Google Cloud OAuth client used by the local login. It does not grant GA4 or GTM product access.
+This guide explains how the server obtains Application Default Credentials (ADC). It does not create GA4 or GTM product permissions.
 
-## Before you start
+| Item | Purpose | What it does not do |
+|---|---|---|
+| ADC | Supplies a Google identity and OAuth scopes to Google Auth Library | Does not grant GA4 property or GTM account/container roles |
+| Operator identity | Holds the existing GA4/GTM product permissions | Does not require a runtime Google Cloud project ID |
+| MCP host | Starts the local stdio server | Does not acquire or store Google credentials for the server |
+| Execution spec | Declares reviewed desired state and target resources | Never contains credentials or secret values |
 
-Choose a Google Cloud project the operator is allowed to configure. Separately, confirm that the Google user who will run this server already has every intended permission in the target GA4 properties and GTM accounts/containers.
+The server does not read or require a Google Cloud project ID for GA4 Admin or GTM API calls. ADC supplies the identity; OAuth scopes authorize API capabilities; existing GA4/GTM product roles authorize access to the target resources.
 
-These are independent authorization systems:
+## ADC source precedence
 
-- Google Cloud owns API enablement, the OAuth audience, and the Desktop client.
-- GA4 and GTM own product access for the operator's Google user.
-
-Creating the Cloud project or OAuth client never adds the user to GA4 or GTM.
-
-## Enable the APIs
-
-Open the [Google Cloud API Library](https://console.cloud.google.com/apis/library), select the intended project, and enable:
-
-| API | Service name |
-|-----|--------------|
-| Google Analytics Admin API | `analyticsadmin.googleapis.com` |
-| Tag Manager API | `tagmanager.googleapis.com` |
-
-Console flow:
-
-1. Open **Google Cloud Console > APIs & Services > Library**.
-2. Select the intended project in the project picker.
-3. Find each API above and click **Enable**.
-
-## Configure the OAuth audience
-
-Open [Google Auth Platform](https://console.cloud.google.com/auth/overview) for the same Cloud project and configure its branding and audience.
-
-Choose the audience deliberately:
-
-- Choose **Internal** only when the project belongs to a Google Workspace or Cloud Identity organization and every intended operator belongs to that same organization. Internal is not available for an ordinary consumer-owned project.
-- Otherwise choose **External**. While an External app is in **Testing**, add each operator as a test user. Because this server requests GA4/GTM API scopes outside Google's basic identity set, that authorization and its refresh token expire seven days after consent.
-- For a durable one-time local login, use an eligible Internal app or configure the External app for **In production**. Publishing status and verification are separate: moving an External app to In production removes the Testing-specific seven-day expiry, while verification governs scope approval, warnings, and applicable user caps.
-
-External apps may show an unverified-app warning or be subject to a user cap. Whether verification is required depends on the audience, requested scopes, intended users, and Google's current policy. Do not infer that a local or In-production app is automatically verified.
-
-Current Google references:
-
-- [OAuth overview and refresh-token expiration](https://developers.google.com/identity/protocols/oauth2)
-- [OAuth app audience and seven-day Testing behavior](https://support.google.com/cloud/answer/15549945)
-
-## Create a Desktop client
-
-1. Open **Google Auth Platform > Clients**.
-2. Click **Create client**.
-3. Select application type **Desktop app**.
-4. Give the client a recognizable local-operations name.
-5. Click **Create**.
-6. Download the client JSON.
-7. Move it to a private absolute path outside version control, for example:
+For the sources documented here, Google Auth Library resolves ADC in this order: an explicitly selected `GOOGLE_APPLICATION_CREDENTIALS` file, gcloud's well-known local user-ADC file, then an attached Google-hosted runtime identity. Set the optional `GOOGLE_APPLICATION_CREDENTIALS` environment variable only when selecting an alternate ADC credential file, and use an absolute path:
 
 ```text
-/absolute/path/to/private/google-oauth-client.json
+GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/to/private/application-default-credentials.json
 ```
 
-The downloaded file must use Google's Desktop-client JSON shape with a top-level `installed` object. Do not hand-edit it into a Web-client file.
+When it is unset, the normal local user-ADC source is gcloud's well-known ADC location. Other standard ADC sources, including an environment-provided workload identity, may be appropriate for a managed runtime. The server does not accept an OAuth client JSON as a runtime credential file.
 
-Treat the file as a secret because it contains the OAuth client secret. Do not commit it, paste it into MCP configuration, or share its contents in support output.
+For service-account impersonation, use a standard ADC configuration that instructs Google Auth Library to impersonate the approved service account. The impersonated identity must itself have the required GA4/GTM product roles. Do not add service-account keys or impersonation configuration to an execution spec or application repository.
+
+## Supported local user-ADC acquisition
+
+The supported local flow uses gcloud and an acquisition-only Desktop OAuth client:
+
+1. In the Google Cloud project used for OAuth setup, enable Google Analytics Admin API and Tag Manager API.
+2. In Google Auth Platform, configure the intended audience and create an application type **Desktop app** client.
+3. Store the downloaded JSON outside repositories at an absolute private path, such as `/absolute/path/to/oauth-client.json`.
+4. Run the [login command](user-oauth-login.md) with `--client-id-file`.
+
+The client JSON identifies gcloud during browser acquisition only. It is not passed to the MCP host or read by the runtime server. Treat it as sensitive and do not copy its contents into documentation, specs, logs, or tracked configuration.
+
+## Scope acquisition
+
+`npm run login` delegates to `gcloud auth application-default login --disable-quota-project` with the complete runtime scope union plus gcloud's required `cloud-platform` scope. The command stays active while the operator finishes browser authorization and writes standard user ADC. Bare `npm run login` uses the built-in gcloud client and is best-effort for custom Analytics scopes. Keep `cloud-platform` in gcloud's scope list because gcloud requires it for the custom-scope user-ADC flow; runtime mode scope arrays remain unchanged.
+
+ADC and OAuth scopes authorize API capability, but they do not add GA4 property or GTM account/container roles. Select the operator identity deliberately and confirm its existing product permissions before use.
+
+## No runtime project input
+
+Do not add a Google Cloud project ID to server or MCP-host runtime configuration for GA4/GTM calls. The Cloud project can be needed to administer OAuth setup or APIs, but it is not a runtime GA4/GTM input. Target resources belong in the reviewed execution spec and explicit tool arguments.
 
 ## Next step
 
-Continue with [User OAuth login](user-oauth-login.md) to set the two absolute paths and create the local refresh-token record.
+Continue with [User OAuth login](user-oauth-login.md).

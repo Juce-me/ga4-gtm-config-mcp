@@ -1,5 +1,14 @@
 // tests/server.boot.test.ts
-import { afterEach, describe, it, expect, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { buildAuthMock } = vi.hoisted(() => ({
+  buildAuthMock: vi.fn(),
+}));
+
+vi.mock("../src/auth/googleAuth.js", () => ({
+  buildAuth: buildAuthMock,
+}));
+
 import { buildServer } from "../src/server.js";
 import { assertSafeToolMetadata } from "../src/safety/toolMetadataGuards.js";
 
@@ -19,13 +28,13 @@ const EXPECTED_TOOL_NAMES = [
 ];
 
 describe("server bootstrap", () => {
-  afterEach(() => vi.unstubAllEnvs());
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
-  it("constructs without OAuth paths and retains the full safe tool catalog", () => {
-    vi.stubEnv("GOOGLE_OAUTH_CLIENT_SECRETS", undefined);
-    vi.stubEnv("GOOGLE_OAUTH_TOKEN_PATH", undefined);
-
+  it("constructs without resolving ADC and retains the full safe tool catalog", () => {
     const { tools } = buildServer();
+    expect(buildAuthMock).not.toHaveBeenCalled();
     expect(tools.map((tool) => tool.name).sort()).toEqual(EXPECTED_TOOL_NAMES);
     expect(() => assertSafeToolMetadata(tools)).not.toThrow();
   });

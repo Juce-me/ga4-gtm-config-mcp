@@ -1,6 +1,6 @@
 # Replace workload credentials with user OAuth
 
-Status: executed
+Status: obsolete
 Review: approved
 Type: feature
 Author: a.feygin
@@ -70,28 +70,11 @@ contact; none was invented as part of this feature.
 
 ## Current Accuracy
 
-Current for the shipped implementation, canonical setup documentation, and fresh automated
-verification above. The architecture, fixed decisions, security behavior, changed-file
-inventory, expected behavior, and automated acceptance criteria remain accurate, subject to
-the distinct-path checks, descriptor-safe I/O, pre-rename inode verification,
-timeout-invalidation, no-fail rename commit point, and explicit login lifecycle hardening
-summarized in **Outcome**.
-
-Credentialed behavior is not yet operator-accepted. An eligible Internal or In-production
-External consent screen, a private Desktop OAuth client, and private GA4/GTM resources are
-required to complete the remaining local checks:
-
-1. Set private absolute `GOOGLE_OAUTH_CLIENT_SECRETS` and `GOOGLE_OAUTH_TOKEN_PATH` values.
-2. Run `npm run login`, complete consent, and inspect only the allowed token metadata and
-   mode `0600` without printing the refresh token.
-3. Confirm the granted scope set equals `ALL_LOGIN_SCOPES`.
-4. With `INCLUDE_PUBLISH_SCOPE` unset, confirm publish mode fails locally before a Google
-   request.
-5. Through the MCP client, read one authorized private GA4 property and one authorized
-   private GTM container.
-6. Verify operator-local registration with `claude mcp get ga4-gtm-config`.
-
-These operator steps must not include a live write or publish.
+Obsolete: Application Default Credentials superseded this repository-managed Desktop OAuth
+runtime and login contract. Its historical implementation and verification record is
+preserved above; current guidance is in
+[the executed ADC-only authentication design](EXECUTED-2026-09-01-adc-only-auth-design.md)
+and [the executed ADC-only authentication implementation plan](EXECUTED-2026-09-01-adc-only-auth-implementation.md).
 
 > **Execution requirement:** Implement the tasks in order, keep each checkpoint green,
 > and stop if the implementation needs a file or contract outside the allowed scope.

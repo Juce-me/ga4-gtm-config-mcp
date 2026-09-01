@@ -1,6 +1,6 @@
 # ADC-Only Authentication Design
 
-Status: planned
+Status: executed
 Type: feature
 Author: Juce-me
 
@@ -101,3 +101,19 @@ The existing setup filenames remain stable to avoid breaking links; their titles
 ## Migration
 
 Operators acquire or refresh ADC, restart the MCP host, and remove `GOOGLE_OAUTH_CLIENT_SECRETS` and `GOOGLE_OAUTH_TOKEN_PATH` from the host configuration. Existing repository-specific Desktop client and token files become unused but are never deleted by the migration. `GOOGLE_APPLICATION_CREDENTIALS` remains optional and, when set, must be a nonblank absolute path selecting a non-default ADC file. `INCLUDE_PUBLISH_SCOPE` retains its current meaning as a publish-mode operation gate.
+
+## Outcome
+
+Implemented as planned. The implementation is now the source of truth. Automated tests,
+typecheck, and build passed; the read-only built-runtime ADC smoke test was attempted and
+returned the redacted `PERMISSION_DENIED` / `adc_unavailable` result.
+
+## Current Accuracy
+
+Accurate as of execution: the documented architecture and accepted risks match the
+implementation. UI/UX wording and flow, backend/API correctness, security/privacy, and
+architecture/contracts were reviewed. Accessibility was not applicable because no UI or
+media changed. The pre-existing absence of a documented vulnerability/incident contact
+remains deferred and was not changed by this authentication migration. Credentialed operator
+acceptance remains pending because existing ADC was unavailable or invalid and no private
+GA4/GTM target resources were supplied for read-only visibility checks.

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-Status: planned
+Status: executed
 Type: feature
 Author: Juce-me
 
@@ -12,7 +12,7 @@ Author: Juce-me
 
 **Tech Stack:** TypeScript 5.9, Node.js 20+, ESM/NodeNext, `googleapis` 172.0.0, Vitest 3.2.4, npm, gcloud CLI.
 
-**Source design:** [PLANNED-2026-09-01-adc-only-auth-design.md](PLANNED-2026-09-01-adc-only-auth-design.md)
+**Source design:** [EXECUTED-2026-09-01-adc-only-auth-design.md](EXECUTED-2026-09-01-adc-only-auth-design.md)
 
 **Commit policy:** The current request does not authorize commits. Run each checkpoint and inspect the diff, but do not commit until the user explicitly requests it.
 
@@ -38,7 +38,7 @@ Author: Juce-me
 - Modify: `tests/auth.test.ts`
 - Test: `tests/auth.test.ts`
 
-- [ ] **Step 1: Replace the Desktop-token mock with a GoogleAuth boundary mock**
+- [x] **Step 1: Replace the Desktop-token mock with a GoogleAuth boundary mock**
 
 Keep the existing scope-constant assertions. Replace the `userOAuth` module mock and stored-token helpers with this setup:
 
@@ -77,7 +77,7 @@ beforeEach(() => {
 });
 ```
 
-- [ ] **Step 2: Add failing tests for exact GoogleAuth scope selection, provider return, and eager token validation**
+- [x] **Step 2: Add failing tests for exact GoogleAuth scope selection, provider return, and eager token validation**
 
 Use the existing `MODE_SCOPES` table and add:
 
@@ -119,7 +119,7 @@ it("waits for access-token validation before returning the GoogleAuth provider",
 });
 ```
 
-- [ ] **Step 3: Add failing tests for path validation, publish short-circuiting, empty tokens, and redacted ADC failures**
+- [x] **Step 3: Add failing tests for path validation, publish short-circuiting, empty tokens, and redacted ADC failures**
 
 Prove the optional ADC selector follows the repository contract:
 
@@ -220,7 +220,7 @@ it.each([undefined, null, "", "   "])(
 );
 ```
 
-- [ ] **Step 4: Run the focused test and confirm it fails for the old OAuth implementation**
+- [x] **Step 4: Run the focused test and confirm it fails for the old OAuth implementation**
 
 Run:
 
@@ -236,7 +236,7 @@ Expected: FAIL because `buildAuth` still imports `loadUserOAuth`, never construc
 - Modify: `src/auth/googleAuth.ts`
 - Test: `tests/auth.test.ts`
 
-- [ ] **Step 1: Replace `loadUserOAuth` with GoogleAuth ADC resolution**
+- [x] **Step 1: Replace `loadUserOAuth` with GoogleAuth ADC resolution**
 
 Make `src/auth/googleAuth.ts` contain this behavior:
 
@@ -300,7 +300,7 @@ export async function buildAuth(
 }
 ```
 
-- [ ] **Step 2: Run the focused tests**
+- [x] **Step 2: Run the focused tests**
 
 Run:
 
@@ -310,7 +310,7 @@ npx vitest run tests/auth.test.ts
 
 Expected: PASS; all four modes pass exact constructor scopes, publish short-circuits, path and nonblank-token validation occur at the auth boundary, the provider is returned, and provider values are absent from serialized errors.
 
-- [ ] **Step 3: Type-check the new client type against GA4 and GTM callers**
+- [x] **Step 3: Type-check the new client type against GA4 and GTM callers**
 
 Run:
 
@@ -320,7 +320,7 @@ npm run typecheck
 
 Expected: PASS, including `google.analyticsadmin({ auth })` and `google.tagmanager({ auth })`. The return type must remain the `GoogleAuth` provider type verified against both generated clients. Do not return the resolved `AnyAuthClient` union and do not cast it to `OAuth2Client`; either choice rejects or excludes valid ADC credential types.
 
-- [ ] **Step 4: Inspect the checkpoint instead of committing**
+- [x] **Step 4: Inspect the checkpoint instead of committing**
 
 Run:
 
@@ -344,7 +344,7 @@ Expected: no whitespace errors; only the ADC boundary and its tests changed.
 - Test: `tests/login.adc.test.ts`
 - Test: `tests/server.boot.test.ts`
 
-- [ ] **Step 1: Add a failing package-script contract test**
+- [x] **Step 1: Add a failing package-script contract test**
 
 Create `tests/login.adc.test.ts`:
 
@@ -382,7 +382,7 @@ describe("ADC login command", () => {
 });
 ```
 
-- [ ] **Step 2: Run the login contract test and verify it fails**
+- [x] **Step 2: Run the login contract test and verify it fails**
 
 Run:
 
@@ -392,7 +392,7 @@ npx vitest run tests/login.adc.test.ts
 
 Expected: FAIL because the current script builds and runs `dist/cli/login.js`.
 
-- [ ] **Step 3: Replace the package login script with the exact gcloud ADC command**
+- [x] **Step 3: Replace the package login script with the exact gcloud ADC command**
 
 Set `scripts.login` in `package.json` to:
 
@@ -411,7 +411,7 @@ The client file is an acquisition-only gcloud input. Runtime code and MCP config
 must never parse or require it. The bare `npm run login` form uses gcloud's built-in OAuth
 client and is best-effort because Google can reject custom Analytics scopes for that client.
 
-- [ ] **Step 4: Verify the installed gcloud contract without mutating ADC**
+- [x] **Step 4: Verify the installed gcloud contract without mutating ADC**
 
 Run:
 
@@ -423,7 +423,7 @@ Expected: help lists `--disable-quota-project`, `--client-id-file`, `--scopes`, 
 control flags, and instructs operators to provide a custom OAuth client for non-Cloud
 scopes. Do not run the interactive login as part of this checkpoint.
 
-- [ ] **Step 5: Remove the obsolete private OAuth implementation and tests**
+- [x] **Step 5: Remove the obsolete private OAuth implementation and tests**
 
 Delete exactly:
 
@@ -436,7 +436,7 @@ tests/cli.login.test.ts
 
 Do not delete any operator credential files outside the repository.
 
-- [ ] **Step 6: Make the server boot test credential-source neutral**
+- [x] **Step 6: Make the server boot test credential-source neutral**
 
 Replace the test body in `tests/server.boot.test.ts` with:
 
@@ -450,7 +450,7 @@ it("constructs without resolving ADC and retains the full safe tool catalog", ()
 
 Remove unused `afterEach` and `vi` imports. Server construction must remain lazy; ADC is resolved only when a Google-backed tool is called.
 
-- [ ] **Step 7: Run the focused login, auth, and boot tests**
+- [x] **Step 7: Run the focused login, auth, and boot tests**
 
 Run:
 
@@ -460,7 +460,7 @@ npx vitest run tests/login.adc.test.ts tests/auth.test.ts tests/server.boot.test
 
 Expected: PASS.
 
-- [ ] **Step 8: Prove no runtime source references the removed credential format**
+- [x] **Step 8: Prove no runtime source references the removed credential format**
 
 Run:
 
@@ -478,7 +478,7 @@ Expected: no matches.
 - Modify: `README.md`
 - Test: documentation search checks
 
-- [ ] **Step 1: Replace `.env.example` with the ADC-only environment contract**
+- [x] **Step 1: Replace `.env.example` with the ADC-only environment contract**
 
 Use:
 
@@ -498,7 +498,7 @@ INCLUDE_PUBLISH_SCOPE=
 # explicit tool arguments and spec fields, not environment variables.
 ```
 
-- [ ] **Step 2: Rewrite README setup, configuration, limitations, and troubleshooting**
+- [x] **Step 2: Rewrite README setup, configuration, limitations, and troubleshooting**
 
 Make this the canonical short setup flow:
 
@@ -529,7 +529,7 @@ Use this troubleshooting distinction:
 
 State once, near login instructions, that gcloud's built-in OAuth client is a best-effort convenience for custom Analytics scopes. Make the acquisition-only custom-client command the supported user-ADC path and describe service-account impersonation or another externally provisioned ADC as alternatives. Do not describe the acquisition-only client file as a runtime MCP input. Remove active claims about private repo token storage, testing-app seven-day tokens, and repository-specific OAuth client path validation.
 
-- [ ] **Step 3: Check the root docs for forbidden active instructions**
+- [x] **Step 3: Check the root docs for forbidden active instructions**
 
 Run:
 
@@ -549,7 +549,7 @@ Expected: no matches.
 - Modify: `docs/setup/application-project-integration.md`
 - Test: documentation search checks
 
-- [ ] **Step 1: Establish the same four boundaries in every setup guide**
+- [x] **Step 1: Establish the same four boundaries in every setup guide**
 
 Use this terminology consistently:
 
@@ -576,7 +576,7 @@ bare `npm run login` uses the built-in gcloud client and is best-effort for cust
 scopes. Keep `cloud-platform` in the gcloud scope list because gcloud requires it for this
 custom-scope user-ADC flow; runtime mode scope arrays remain unchanged.
 
-- [ ] **Step 2: Give each existing guide one clear responsibility**
+- [x] **Step 2: Give each existing guide one clear responsibility**
 
 Rewrite without renaming files:
 
@@ -595,7 +595,7 @@ Use this projectless runtime statement verbatim in the overview and credentials 
 The server does not read or require a Google Cloud project ID for GA4 Admin or GTM API calls. ADC supplies the identity; OAuth scopes authorize API capabilities; existing GA4/GTM product roles authorize access to the target resources.
 ```
 
-- [ ] **Step 3: Run the complete active-documentation search**
+- [x] **Step 3: Run the complete active-documentation search**
 
 Run:
 
@@ -609,7 +609,7 @@ Expected output: exactly one migration-only line in `docs/setup/README.md` may c
 two removed variable names. Any other match fails this checkpoint. The acquisition-only
 custom-client instructions must not reuse either removed runtime variable.
 
-- [ ] **Step 4: Check documentation against the project review criteria**
+- [x] **Step 4: Check documentation against the project review criteria**
 
 Record these findings for the final artifact:
 
@@ -628,7 +628,7 @@ Deferred pre-existing finding: the repository has no documented vulnerability/in
 - Modify: `AGENTS.md`
 - Test: instruction consistency search
 
-- [ ] **Step 1: Replace obsolete authentication project context**
+- [x] **Step 1: Replace obsolete authentication project context**
 
 Update the relevant command, layout, and constraint lines to say:
 
@@ -641,7 +641,7 @@ Update the relevant command, layout, and constraint lines to say:
 
 Update the source-layout description so `src/auth/` names scope tiers and the ADC auth factory, and remove `src/cli/` if it becomes empty.
 
-- [ ] **Step 2: Consolidate project learnings around the new source of truth**
+- [x] **Step 2: Consolidate project learnings around the new source of truth**
 
 Replace Desktop-client-specific learnings with:
 
@@ -655,7 +655,7 @@ Replace Desktop-client-specific learnings with:
 
 Preserve the existing rule prohibiting real identifiers, tokens, emails, and machine paths in public documentation.
 
-- [ ] **Step 3: Verify current instructions no longer mandate the removed flow**
+- [x] **Step 3: Verify current instructions no longer mandate the removed flow**
 
 Run:
 
@@ -674,7 +674,7 @@ Expected: no matches.
 - Rename after ADC ships: `docs/agents/features/EXECUTED-user-oauth-auth.md` to
   `docs/agents/features/OBSOLETE-user-oauth-auth.md`
 
-- [ ] **Step 1: Run all automated verification**
+- [x] **Step 1: Run all automated verification**
 
 Run separately and read complete failures:
 
@@ -687,7 +687,7 @@ git diff --check
 
 Expected: every command exits `0`.
 
-- [ ] **Step 2: Verify ADC token acquisition through the built runtime boundary**
+- [ ] **Step 2: Verify ADC token acquisition through the built runtime boundary (deferred/pending: no usable operator ADC was available)**
 
 Run this read-only smoke test without logging the returned token:
 
@@ -697,7 +697,7 @@ node --input-type=module -e 'import { buildAuth } from "./dist/auth/googleAuth.j
 
 Expected: `ADC token acquisition succeeded` on stderr. If sandboxed network access blocks the request, rerun only after obtaining the required execution approval. If ADC itself fails, run the documented supported `npm run login` form interactively and keep it active until the operator finishes authorization.
 
-- [ ] **Step 3: Run read-only GA4 and GTM visibility checks with session-provided targets**
+- [ ] **Step 3: Run read-only GA4 and GTM visibility checks with session-provided targets (deferred/pending: no private target resources were supplied)**
 
 Use the target resource names supplied by the operator in the active session without writing them into repository files or command examples. Call only list/get methods through the existing wrappers or MCP read tools.
 
@@ -707,7 +707,7 @@ consumer/quota policy, or organization policy. A `404` may indicate an incorrect
 invisible target. Neither result alone proves an ADC project-ID failure. Do not serialize
 the provider response and do not proceed to writes during this authentication task.
 
-- [ ] **Step 4: Inspect the complete diff for scope and secrets**
+- [x] **Step 4: Inspect the complete diff for scope and secrets**
 
 Run:
 
@@ -724,7 +724,7 @@ documentation. Inspect the complete diff because field-name searches cannot dist
 schema key from a secret value. Pre-existing findings in unrelated runtime paths and
 historical artifacts are out of scope and must not be reported as fixed.
 
-- [ ] **Step 5: Finalize artifact status and documentation review outcome**
+- [x] **Step 5: Finalize artifact status and documentation review outcome**
 
 After implementation and automated verification pass, rename both ADC artifacts to
 `EXECUTED-2026-09-01-...` and set `Status: executed`. Update this implementation artifact's
@@ -757,7 +757,7 @@ and verification record, and replace its Current Accuracy with a concise stateme
 superseded its runtime/login contract. Link it to both executed ADC artifacts only after
 those target filenames exist. Do not delete or rewrite its historical plan.
 
-- [ ] **Step 6: Verify affected artifact links and setup anchors**
+- [x] **Step 6: Verify affected artifact links and setup anchors**
 
 After the status renames, run:
 
@@ -776,6 +776,23 @@ current-guidance links outside the intentionally historical executed ADC plans a
 OAuth artifact. Inspect all relative links changed by the diff and confirm their target file
 and heading exist.
 
-- [ ] **Step 7: Report results without committing**
+- [x] **Step 7: Report results without committing**
 
 Report the exact commands and outcomes, the ADC smoke-test result, any GA4/GTM product-access blocker, files removed, and the final artifact links. Leave all changes uncommitted unless the user separately authorizes a commit.
+
+## Outcome
+
+Implemented as planned. The implementation is now the source of truth. `npm test` passed
+37 test files and 165 tests; `npm run typecheck`, `npm run build`, and `git diff --check`
+exited `0`. The read-only built-runtime ADC smoke test was attempted without logging a token
+and returned the redacted `PERMISSION_DENIED` / `adc_unavailable` result.
+
+## Current Accuracy
+
+Accurate as of execution. UI/UX wording and flow, backend/API correctness,
+security/privacy, and architecture/contracts were reviewed. Accessibility was not applicable
+because no UI or media changed. The pre-existing absence of a documented
+vulnerability/incident contact remains deferred and was not changed by this authentication
+migration. Credentialed operator acceptance remains pending: existing ADC was unavailable or
+invalid, and no private GA4/GTM target resources were supplied for read-only visibility
+checks.

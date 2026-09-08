@@ -184,6 +184,7 @@ This is an execution layer, not an analytics planner. It must not invent events,
 - Delete stale learnings when the underlying issue goes away.
 - Use ADC as the only GA4/GTM runtime authentication path; never restore repository-managed Desktop-client or refresh-token fallbacks.
 - `npm run login` provisions standard gcloud ADC with the complete login scope union and no quota project; document the built-in client as best-effort and the acquisition-only custom-client form as supported, and keep the process active while the operator completes browser OAuth.
+- For operator-controlled custom-client authorization, keep `npm run login` active and relay its printed authorization URL without automating the browser; do not use `--no-launch-browser`, and use `--no-browser` only when a separate-machine remote-bootstrap flow is actually required.
 - Do not require a runtime Google Cloud project ID for GA4/GTM client calls; ADC supplies credentials, OAuth scopes authorize capabilities, and GA4/GTM product roles authorize resources.
 - Use absolute placeholder paths for optional `GOOGLE_APPLICATION_CREDENTIALS`, the Node executable, and the server entrypoint in every MCP configuration example.
 - Describe `INCLUDE_PUBLISH_SCOPE` only as the publish-mode operation gate; it does not alter scope acquisition or bypass publish guards.

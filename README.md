@@ -50,10 +50,12 @@ npm run typecheck
 The short version:
 
 1. Install the gcloud CLI and identify the Google user that already has the required GA4/GTM product roles.
-2. For the supported custom-scope path, run `npm run login -- --client-id-file=/absolute/path/to/oauth-client.json` and keep it active while browser authorization completes. The client file is used only by gcloud during acquisition. Bare `npm run login` uses gcloud's built-in client; Google may reject its custom Analytics scopes. Both forms write standard ADC without a quota project.
+2. Create a Google OAuth client with application type **Desktop app**, download its real JSON to a private absolute path outside every repository, and use [`oauth-client-example.json`](oauth-client-example.json) only as a reference for the expected file shape. Run `npm run login -- --client-id-file=/absolute/path/to/oauth-client.json` and keep it active while browser authorization completes. The real client file is used only by gcloud during acquisition and must not be assigned to `GOOGLE_APPLICATION_CREDENTIALS`. Bare `npm run login` uses gcloud's built-in client; Google may reject its custom Analytics scopes.
 3. Run `npm run build`, then configure the MCP host with the absolute Node and `dist/server.js` paths.
 4. Leave `GOOGLE_APPLICATION_CREDENTIALS` unset to use the well-known local ADC, or set it to an absolute path for another ADC source.
 5. Leave `INCLUDE_PUBLISH_SCOPE` unset unless publishing is explicitly approved.
+
+The tracked OAuth client example contains placeholders only. Do not replace those placeholders in Git, copy a downloaded client JSON into this repository, or configure a client-ID file as ADC. `GOOGLE_APPLICATION_CREDENTIALS` accepts an ADC credential file, not an OAuth client-ID download.
 
 The acquisition-only custom-client command is the supported user-ADC path. gcloud's built-in OAuth client is a best-effort convenience for custom Analytics scopes. Service-account impersonation or another externally provisioned standard ADC source are alternatives when user ADC is not appropriate. OAuth scopes and ADC do not add GA4/GTM product access.
 

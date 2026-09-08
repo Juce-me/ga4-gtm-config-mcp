@@ -29,10 +29,12 @@ The supported local flow uses gcloud and an acquisition-only Desktop OAuth clien
 
 1. In the Google Cloud project used for OAuth setup, enable Google Analytics Admin API and Tag Manager API.
 2. In Google Auth Platform, configure the intended audience and create an application type **Desktop app** client.
-3. Store the downloaded JSON outside repositories at an absolute private path, such as `/absolute/path/to/oauth-client.json`.
+3. Download the real client JSON to a private absolute path outside every repository. Use the tracked [`oauth-client-example.json`](../../oauth-client-example.json) only to recognize the expected JSON shape; never fill its placeholders with real values.
 4. Run the [login command](user-oauth-login.md) with `--client-id-file`.
 
 The client JSON identifies gcloud during browser acquisition only. It is not passed to the MCP host or read by the runtime server. Treat it as sensitive and do not copy its contents into documentation, specs, logs, or tracked configuration.
+
+The client-ID download is an acquisition input, not ADC; never assign its path to `GOOGLE_APPLICATION_CREDENTIALS`.
 
 ## Scope acquisition
 

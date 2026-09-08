@@ -8,12 +8,22 @@ import {
 } from "../src/auth/scopes.js";
 import * as scopes from "../src/auth/scopes.js";
 
-const { loadUserOAuthMock } = vi.hoisted(() => ({
-  loadUserOAuthMock: vi.fn(),
+const {
+  googleAuthConstructorMock,
+  getClientMock,
+  getAccessTokenMock,
+} = vi.hoisted(() => ({
+  googleAuthConstructorMock: vi.fn(),
+  getClientMock: vi.fn(),
+  getAccessTokenMock: vi.fn(),
 }));
 
-vi.mock("../src/auth/userOAuth.js", () => ({
-  loadUserOAuth: loadUserOAuthMock,
+vi.mock("googleapis", () => ({
+  google: {
+    auth: {
+      GoogleAuth: googleAuthConstructorMock,
+    },
+  },
 }));
 
 import { buildAuth, type AuthMode } from "../src/auth/googleAuth.js";
@@ -39,31 +49,21 @@ const PUBLISH_MODE_SCOPES = [
   "https://www.googleapis.com/auth/tagmanager.publish",
 ] as const;
 
+const EXPECTED_OPERATIONAL_SCOPES = [
+  "https://www.googleapis.com/auth/tagmanager.readonly",
+  "https://www.googleapis.com/auth/analytics.readonly",
+  "https://www.googleapis.com/auth/tagmanager.edit.containers",
+  "https://www.googleapis.com/auth/analytics.edit",
+  "https://www.googleapis.com/auth/tagmanager.edit.containerversions",
+  "https://www.googleapis.com/auth/tagmanager.publish",
+] as const;
+
 const MODE_SCOPES: Record<AuthMode, readonly string[]> = {
   read: READ_MODE_SCOPES,
   write: WRITE_MODE_SCOPES,
   version: VERSION_MODE_SCOPES,
   publish: PUBLISH_MODE_SCOPES,
 };
-
-function arrangeLoadedOAuth(
-  grantedScopes: readonly string[],
-  getAccessToken = vi.fn().mockResolvedValue({ token: "access-token-placeholder" }),
-) {
-  const auth = { getAccessToken };
-  const token = {
-    refresh_token: "refresh-token-placeholder",
-    granted_scopes: [...grantedScopes],
-    client_id: "client-id-placeholder",
-    obtained_at: "2026-07-28T12:34:56.000Z",
-  };
-  loadUserOAuthMock.mockReturnValue({
-    auth,
-    token,
-    tokenPath: "/configured/token.json",
-  });
-  return { auth, getAccessToken, token };
-}
 
 async function capturePermissionDenied(
   run: () => Promise<unknown>,
@@ -103,24 +103,26 @@ describe("auth scopes", () => {
     expect(PUBLISH_SCOPES).toContain("https://www.googleapis.com/auth/tagmanager.publish");
   });
 
-  it("ALL_LOGIN_SCOPES combines every operational scope without user-management grants", () => {
-    const allLoginScopes = (scopes as Record<string, readonly string[]>).ALL_LOGIN_SCOPES ?? [];
+  it("ALL_LOGIN_SCOPES equals the exact independent operational-scope set", () => {
+    const allLoginScopes = scopes.ALL_LOGIN_SCOPES;
 
-    for (const scopeSet of [READ_SCOPES, WRITE_WORKSPACE_SCOPES, VERSION_SCOPES, PUBLISH_SCOPES]) {
-      for (const scope of scopeSet) expect(allLoginScopes).toContain(scope);
-    }
-
-    expect(new Set(allLoginScopes).size).toBe(allLoginScopes.length);
-    expect(allLoginScopes).not.toContain("https://www.googleapis.com/auth/analytics.manage.users");
-    expect(allLoginScopes).not.toContain("https://www.googleapis.com/auth/tagmanager.manage.users");
+    expect(new Set(allLoginScopes)).toEqual(new Set(EXPECTED_OPERATIONAL_SCOPES));
+    expect(allLoginScopes).toHaveLength(EXPECTED_OPERATIONAL_SCOPES.length);
   });
 });
 
 describe("buildAuth", () => {
+  const authClient = { getAccessToken: getAccessTokenMock };
+  const googleAuthProvider = { getClient: getClientMock };
+
   beforeEach(() => {
     vi.clearAllMocks();
     vi.unstubAllEnvs();
     vi.stubEnv("INCLUDE_PUBLISH_SCOPE", "");
+    vi.stubEnv("GOOGLE_APPLICATION_CREDENTIALS", undefined);
+    getAccessTokenMock.mockResolvedValue({ token: "access-token-placeholder" });
+    getClientMock.mockResolvedValue(authClient);
+    googleAuthConstructorMock.mockImplementation(() => googleAuthProvider);
   });
 
   afterEach(() => {
@@ -128,156 +130,126 @@ describe("buildAuth", () => {
   });
 
   it.each(Object.entries(MODE_SCOPES))(
-    "returns the loaded OAuth2 client when %s mode has exactly its required stored grants",
+    "constructs ADC with exactly the %s mode scopes and validates one token",
     async (mode, requiredScopes) => {
       if (mode === "publish") vi.stubEnv("INCLUDE_PUBLISH_SCOPE", "1");
-      const { auth, getAccessToken } = arrangeLoadedOAuth(requiredScopes);
 
-      await expect(buildAuth({ mode: mode as AuthMode })).resolves.toBe(auth);
+      await expect(buildAuth({ mode: mode as AuthMode })).resolves.toBe(
+        googleAuthProvider,
+      );
 
-      expect(loadUserOAuthMock).toHaveBeenCalledOnce();
-      expect(getAccessToken).toHaveBeenCalledOnce();
+      expect(googleAuthConstructorMock).toHaveBeenCalledOnce();
+      expect(googleAuthConstructorMock).toHaveBeenCalledWith({
+        scopes: [...requiredScopes],
+      });
+      expect(getClientMock).toHaveBeenCalledOnce();
+      expect(getAccessTokenMock).toHaveBeenCalledOnce();
     },
   );
 
-  it("rejects publish mode before loading OAuth when INCLUDE_PUBLISH_SCOPE is absent", async () => {
-    arrangeLoadedOAuth(PUBLISH_MODE_SCOPES);
+  it("waits for access-token validation before returning the GoogleAuth provider", async () => {
+    let finish!: () => void;
+    getAccessTokenMock.mockReturnValue(new Promise((resolve) => {
+      finish = () => resolve({ token: "access-token-placeholder" });
+    }));
+    let returned = false;
+
+    const pending = buildAuth({ mode: "read" }).then((auth) => {
+      returned = true;
+      return auth;
+    });
+    await Promise.resolve();
+
+    expect(returned).toBe(false);
+    finish();
+    await expect(pending).resolves.toBe(googleAuthProvider);
+  });
+
+  it("uses standard ADC discovery when GOOGLE_APPLICATION_CREDENTIALS is unset", async () => {
+    await expect(buildAuth({ mode: "read" })).resolves.toBe(googleAuthProvider);
+    expect(googleAuthConstructorMock).toHaveBeenCalledOnce();
+  });
+
+  it.each(["", "   ", "relative/adc.json"])(
+    "rejects an invalid GOOGLE_APPLICATION_CREDENTIALS value without exposing it: %j",
+    async (credentialPath) => {
+      vi.stubEnv("GOOGLE_APPLICATION_CREDENTIALS", credentialPath);
+
+      const error = await capturePermissionDenied(() => buildAuth({ mode: "read" }));
+      expect(error).toMatchObject({
+        code: "PERMISSION_DENIED",
+        details: { reason: "adc_unavailable" },
+      });
+      const serialized = JSON.stringify(error.toJSON());
+      if (credentialPath.trim()) {
+        expect(serialized).not.toContain(credentialPath.trim());
+      } else {
+        expect(serialized).not.toContain("GOOGLE_APPLICATION_CREDENTIALS");
+        expect(serialized).not.toContain("path");
+      }
+      expect(googleAuthConstructorMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it("accepts an absolute GOOGLE_APPLICATION_CREDENTIALS selector", async () => {
+    vi.stubEnv(
+      "GOOGLE_APPLICATION_CREDENTIALS",
+      "/absolute/path/to/private/application-default-credentials.json",
+    );
+
+    await expect(buildAuth({ mode: "read" })).resolves.toBe(googleAuthProvider);
+  });
+
+  it("rejects publish mode before ADC discovery when INCLUDE_PUBLISH_SCOPE is absent", async () => {
+    vi.stubEnv("GOOGLE_APPLICATION_CREDENTIALS", "relative/adc.json");
 
     await expect(buildAuth({ mode: "publish" })).rejects.toMatchObject({
       code: "PERMISSION_DENIED",
       message: "Publish mode requires INCLUDE_PUBLISH_SCOPE=1.",
     });
-    expect(loadUserOAuthMock).not.toHaveBeenCalled();
+    expect(googleAuthConstructorMock).not.toHaveBeenCalled();
+    expect(getClientMock).not.toHaveBeenCalled();
   });
 
-  it("uses INCLUDE_PUBLISH_SCOPE only as a publish-mode gate and does not change stored grants", async () => {
-    vi.stubEnv("INCLUDE_PUBLISH_SCOPE", "1");
-    const { auth, token } = arrangeLoadedOAuth(PUBLISH_MODE_SCOPES);
-    const originalGrants = [...token.granted_scopes];
-
-    await expect(buildAuth({ mode: "publish" })).resolves.toBe(auth);
-
-    expect(token.granted_scopes).toEqual(originalGrants);
+  const providerValues = [
+    "provider-message-placeholder",
+    "refresh-token-placeholder",
+    "client-secret-placeholder",
+    "https://oauth2.googleapis.test/token?raw-provider-query",
+  ];
+  const providerError = Object.assign(new Error(providerValues[0]), {
+    response: { data: { refresh_token: providerValues[1] } },
+    client_secret: providerValues[2],
+    config: { url: providerValues[3] },
   });
 
   it.each([
-    ["read", READ_MODE_SCOPES.slice(0, -1)],
-    ["write", WRITE_MODE_SCOPES.slice(0, -1)],
-    ["version", VERSION_MODE_SCOPES.slice(0, -1)],
-    ["publish", PUBLISH_MODE_SCOPES.slice(0, -1)],
-  ] satisfies [AuthMode, readonly string[]][])(
-    "rejects a partial stored grant for %s mode before refreshing",
-    async (mode, partialGrant) => {
-      if (mode === "publish") vi.stubEnv("INCLUDE_PUBLISH_SCOPE", "1");
-      const { getAccessToken } = arrangeLoadedOAuth(partialGrant);
+    ["credential discovery", () => getClientMock.mockRejectedValue(providerError)],
+    ["token acquisition", () => getAccessTokenMock.mockRejectedValue(providerError)],
+  ] as const)("redacts provider values from %s failures", async (_label, arrange) => {
+    arrange();
 
-      const error = await capturePermissionDenied(() => buildAuth({ mode }));
+    const error = await capturePermissionDenied(() => buildAuth({ mode: "read" }));
+    const serialized = JSON.stringify(error.toJSON());
 
-      expect(error.message).toContain("npm run login");
-      expect(error.details).toEqual({ reason: "missing_required_scopes" });
-      expect(getAccessToken).not.toHaveBeenCalled();
+    expect(error).toMatchObject({
+      code: "PERMISSION_DENIED",
+      message: "Google Application Default Credentials are unavailable or invalid. Run the documented npm run login command or configure valid ADC.",
+      details: { reason: "adc_unavailable" },
+    });
+    for (const value of providerValues) expect(serialized).not.toContain(value);
+  });
+
+  it.each([undefined, null, "", "   "])(
+    "rejects an unusable access-token result: %j",
+    async (token) => {
+      getAccessTokenMock.mockResolvedValue({ token });
+
+      const error = await capturePermissionDenied(() => buildAuth({ mode: "read" }));
+      expect(error).toMatchObject({
+        code: "PERMISSION_DENIED",
+        details: { reason: "adc_unavailable" },
+      });
     },
   );
-
-  it("still requires the stored publish grant when INCLUDE_PUBLISH_SCOPE=1", async () => {
-    vi.stubEnv("INCLUDE_PUBLISH_SCOPE", "1");
-    const { getAccessToken } = arrangeLoadedOAuth(WRITE_MODE_SCOPES);
-
-    const error = await capturePermissionDenied(() => buildAuth({ mode: "publish" }));
-
-    expect(error.message).toContain("npm run login");
-    expect(error.details).toEqual({ reason: "missing_required_scopes" });
-    expect(getAccessToken).not.toHaveBeenCalled();
-  });
-
-  it("awaits exactly one access-token refresh before returning the OAuth2 client", async () => {
-    let completeRefresh!: () => void;
-    const refresh = new Promise<{ token: string }>((resolve) => {
-      completeRefresh = () => resolve({ token: "access-token-placeholder" });
-    });
-    const getAccessToken = vi.fn().mockReturnValue(refresh);
-    const { auth } = arrangeLoadedOAuth(READ_MODE_SCOPES, getAccessToken);
-    let returned = false;
-
-    const pendingAuth = buildAuth({ mode: "read" }).then((result) => {
-      returned = true;
-      return result;
-    });
-    await Promise.resolve();
-
-    expect(getAccessToken).toHaveBeenCalledOnce();
-    expect(returned).toBe(false);
-
-    completeRefresh();
-    await expect(pendingAuth).resolves.toBe(auth);
-    expect(getAccessToken).toHaveBeenCalledOnce();
-  });
-
-  it("translates invalid_grant without serializing provider values", async () => {
-    const providerValues = [
-      "provider-message-placeholder",
-      "provider-description-placeholder",
-      "authorization-code-placeholder",
-      "client-secret-placeholder",
-      "https://oauth2.googleapis.test/token?raw-provider-query",
-    ];
-    const providerError = Object.assign(new Error(providerValues[0]), {
-      response: {
-        data: {
-          error: "invalid_grant",
-          error_description: providerValues[1],
-          authorization_code: providerValues[2],
-          client_secret: providerValues[3],
-        },
-      },
-      config: { url: providerValues[4] },
-    });
-    arrangeLoadedOAuth(
-      READ_MODE_SCOPES,
-      vi.fn().mockRejectedValue(providerError),
-    );
-
-    const error = await capturePermissionDenied(() => buildAuth({ mode: "read" }));
-    const serialized = JSON.stringify(error.toJSON());
-
-    expect(error).toMatchObject({
-      code: "PERMISSION_DENIED",
-      message: "Google OAuth authorization expired or was revoked. Run npm run login.",
-      details: {},
-    });
-    for (const value of providerValues) expect(serialized).not.toContain(value);
-  });
-
-  it("redacts generic refresh failures to a stable reason", async () => {
-    const providerValues = [
-      "provider-message-placeholder",
-      "provider-description-placeholder",
-      "refresh-token-placeholder",
-      "https://oauth2.googleapis.test/token?raw-provider-query",
-    ];
-    const providerError = Object.assign(new Error(providerValues[0]), {
-      response: {
-        data: {
-          error: "temporarily_unavailable",
-          error_description: providerValues[1],
-          refresh_token: providerValues[2],
-        },
-      },
-      config: { url: providerValues[3] },
-    });
-    arrangeLoadedOAuth(
-      READ_MODE_SCOPES,
-      vi.fn().mockRejectedValue(providerError),
-    );
-
-    const error = await capturePermissionDenied(() => buildAuth({ mode: "read" }));
-    const serialized = JSON.stringify(error.toJSON());
-
-    expect(error).toMatchObject({
-      code: "PERMISSION_DENIED",
-      message: "Google OAuth token refresh failed. Run npm run login.",
-      details: { reason: "oauth_refresh_failed" },
-    });
-    for (const value of providerValues) expect(serialized).not.toContain(value);
-  });
 });

@@ -8,3 +8,8 @@ coverage/
 .audit/
 .secrets/
 secrets/
+
+# Acquisition-only Google OAuth client downloads. Track the placeholder example only.
+oauth-client*.json
+client_secret_*.apps.googleusercontent.com.json
+!/oauth-client-example.json

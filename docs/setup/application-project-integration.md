@@ -1,44 +1,37 @@
 # Application project integration
 
-The application repo owns analytics planning and instrumentation. This MCP repo executes a reviewed desired-state specification as the operator's Google user.
+The application repository defines analytics behavior and reviewed desired state. This server executes that state using separately configured ADC; application-project configuration does not select runtime Google credentials.
 
-## Application repo responsibilities
+| Item | Purpose | What it does not do |
+|---|---|---|
+| ADC | Supplies a Google identity and OAuth scopes to Google Auth Library | Does not grant GA4 property or GTM account/container roles |
+| Operator identity | Holds the existing GA4/GTM product permissions | Does not require a runtime Google Cloud project ID |
+| MCP host | Starts the local stdio server | Does not acquire or store Google credentials for the server |
+| Execution spec | Declares reviewed desired state and target resources | Never contains credentials or secret values |
 
-Each application repo should maintain:
+## Application repository responsibilities
 
-1. An analytics contract covering event names, `dataLayer` payloads, consent behavior, forbidden PII, and custom-dimension or metric intent.
+An application repository should maintain:
+
+1. The analytics contract, including event names, `dataLayer` payloads, consent behavior, forbidden PII, and custom-dimension or metric intent.
 2. Source-level instrumentation and practical tests for emitted payloads.
-3. Reviewed `*.mcp-execution.yaml` specs with desired GA4/GTM state, target environment, and approval gates.
-4. Private target mapping for the GA4 property and GTM account/container.
+3. Reviewed `*.mcp-execution.yaml` specs declaring desired GA4/GTM state, targets, and approval gates.
 
-The application repo must not assume OAuth grants product permissions. Before execution, the operator's Google user must already have the intended access in the target GA4 property and GTM account/container.
+The application repository passes only reviewed spec paths and explicit target arguments to MCP tools. Target IDs belong in those reviewed inputs, not in credentials or tracked host configuration.
 
-## Keep credentials out of the application repo
+## Keep credentials outside application repositories
 
-Do not store:
+Do not store an OAuth client JSON, an alternate ADC credential file, service-account key, access token, refresh token, operator email, or machine-specific private path in an application repository. Keep every credential source in private operator or managed-runtime storage.
 
-- the downloaded OAuth Desktop client JSON;
-- the generated refresh-token file;
-- an OAuth client ID or secret;
-- an access token or refresh token;
-- a real operator email;
-- real production IDs in public examples;
-- machine-specific absolute paths in tracked configuration.
-
-Keep the two credential files in private operator storage. Configure their absolute paths only in the local MCP host:
-
-```text
-GOOGLE_OAUTH_CLIENT_SECRETS=/absolute/path/to/private/google-oauth-client.json
-GOOGLE_OAUTH_TOKEN_PATH=/absolute/path/to/private/google-oauth-token.json
-```
+The MCP host, not the application repository, selects an optional alternate standard ADC source through `GOOGLE_APPLICATION_CREDENTIALS` with an absolute private path. Leaving it unset uses the well-known ADC source. An OAuth client JSON is acquisition-only input for gcloud and is never a runtime server credential.
 
 ## Execution handoff
 
-1. The application repo produces or updates an `*.mcp-execution.yaml` spec.
-2. A human reviews the spec and its gates.
-3. The operator starts this MCP server with the private OAuth paths.
-4. The server validates the spec, reads current state, and computes a deterministic diff.
-5. Approved writes go to GA4 and a non-live GTM workspace.
-6. Preview, container-version creation, and publish remain separate gated steps.
+1. Produce or update a reviewed `*.mcp-execution.yaml` execution spec.
+2. Review the desired state, target resources, environment, and safety gates.
+3. Start the MCP host using the separate ADC configuration described in [MCP client configuration](mcp-client-configuration.md).
+4. Invoke tools with the reviewed spec path and required target arguments.
+5. Let the server validate the spec, read current state, calculate a deterministic diff, and apply approved writes only to a non-live GTM workspace.
+6. Treat preview, container-version creation, and publish as separate gated actions.
 
-Target IDs belong in the reviewed spec and explicit tool arguments, not OAuth files or environment variables. Public docs should use placeholders such as `GA4_PROPERTY_ID`, `GTM_ACCOUNT_ID`, and `GTM_CONTAINER_ID`.
+ADC supplies an identity and OAuth scopes, while the operator identity must already hold the required GA4/GTM product roles. The execution spec never contains credentials or secret values.

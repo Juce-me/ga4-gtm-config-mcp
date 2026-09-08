@@ -14,7 +14,7 @@
     "test:watch": "vitest",
     "mcp": "node dist/server.js",
     "dev": "tsc -p tsconfig.json && node dist/server.js",
-    "login": "npm run build && node dist/cli/login.js"
+    "login": "gcloud auth application-default login --disable-quota-project --scopes=https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/tagmanager.readonly,https://www.googleapis.com/auth/analytics.readonly,https://www.googleapis.com/auth/tagmanager.edit.containers,https://www.googleapis.com/auth/analytics.edit,https://www.googleapis.com/auth/tagmanager.edit.containerversions,https://www.googleapis.com/auth/tagmanager.publish"
   },
   "engines": {
     "node": ">=20"

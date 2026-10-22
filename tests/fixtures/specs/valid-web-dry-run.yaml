@@ -93,28 +93,20 @@ gtm_web:
       purpose: "logical page name only when approved"
 
   triggers:
-    - name: "CE - userevent - pageview"
+    - name: "CE - pageview"
       type: "custom_event"
-      event_name: "userevent"
-      filters:
-        - variable: "DLV - event_type"
-          operator: "equals"
-          value: "pageview"
+      event_name: "pageview"
 
-    - name: "CE - userevent - event"
+    - name: "CE - userevent"
       type: "custom_event"
       event_name: "userevent"
-      filters:
-        - variable: "DLV - event_type"
-          operator: "equals"
-          value: "event"
 
   tags:
     - name: "GA4 - Page View"
       type: "ga4_event"
       measurement_id: "G-XXXXXXX000"
       event_name: "page_view"
-      trigger: "CE - userevent - pageview"
+      trigger: "CE - pageview"
       params:
         page_name: "{{DLV - userParams.page_name}}"
 
@@ -122,7 +114,7 @@ gtm_web:
       type: "ga4_event"
       measurement_id: "G-XXXXXXX000"
       event_name: "{{DLV - event_name}}"
-      trigger: "CE - userevent - event"
+      trigger: "CE - userevent"
       params:
         feature_name: "{{DLV - feature_name}}"
         screen_name: "{{DLV - screen_name}}"

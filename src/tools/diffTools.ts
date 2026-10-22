@@ -6,6 +6,7 @@ import { validateSpec } from "../spec/validateSpec.js";
 import { toDesiredState } from "../planner/desiredState.js";
 import { toCurrentState } from "../planner/currentState.js";
 import { diffStates } from "../planner/diff.js";
+import { customEventConditionCounts, findCustomEventConditionViolations } from "../planner/triggerRules.js";
 import { buildGa4Admin } from "../ga4/adminClient.js";
 import { buildGtm } from "../gtm/tagManagerClient.js";
 import { readProperty } from "../ga4/properties.js";
@@ -72,6 +73,17 @@ export function registerDiffTools(server: McpServer, registered: ToolMeta[]) {
             tags: tags as Record<string, unknown>[],
           },
         });
+        const violations = {
+          desired: findCustomEventConditionViolations(desired.gtm.triggers),
+          live: findCustomEventConditionViolations(current.gtm.triggers),
+        };
+        if (violations.desired.length > 0 || violations.live.length > 0) {
+          throw new MCPError(
+            "SPEC_INVALID",
+            "Custom event triggers must have only the event-name condition",
+            { violations },
+          );
+        }
         const diff = diffStates(desired, current);
 
         await audit("diff_generated", {
@@ -82,7 +94,7 @@ export function registerDiffTools(server: McpServer, registered: ToolMeta[]) {
           counts: { creates: diff.creates.length, updates: diff.updates.length, unchanged: diff.unchanged.length, blocked: diff.blocked.length },
         });
 
-        return { content: [{ type: "text", text: JSON.stringify({ property: property.name, diff }, null, 2) }] };
+        return { content: [{ type: "text", text: JSON.stringify({ property: property.name, live_custom_event_trigger_conditions: customEventConditionCounts(current.gtm.triggers), diff }, null, 2) }] };
       } catch (e) {
         if (e instanceof MCPError) {
           return { content: [{ type: "text", text: JSON.stringify(e.toJSON(), null, 2) }], isError: true };

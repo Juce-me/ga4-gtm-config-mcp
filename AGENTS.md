@@ -143,12 +143,12 @@ This is an execution layer, not an analytics planner. It must not invent events,
 - Build: `npm run build` (TypeScript → `dist/`)
 - Test: `npm test` (vitest, run-mode; `npm run test:watch` for watch)
 - Typecheck: `npm run typecheck`
-- Authorize local ADC: `npm run login -- --client-id-file=/absolute/path/to/oauth-client.json` (supported custom-scope path); bare `npm run login` uses gcloud's best-effort built-in client. Both delegate to application-default login with the complete login scope set and no quota project.
+- Authorize local ADC: `npm run setup` (guided: gcloud check, Desktop client validation, login, access verification, MCP host snippet) or `npm run login -- --client-id-file=/absolute/path/to/oauth-client.json`. Bare `npm run login` without a client file uses gcloud's built-in client, which Google blocks for the Analytics scopes. Both delegate to application-default login with the complete login scope set and no quota project.
 - Run locally: `npm run dev` (build + run) or `npm run mcp` (run prebuilt). Server speaks MCP over stdio.
 
 ### Layout
 - Project root: repository root (the `ga4-gtm-config-mcp/` directory).
-- Source: `src/` — subdirs `utils/` (errors, redact, stableJson, logger, names), `spec/` (zod schema, readSpec, validateSpec, summarize), `safety/` (9 guards), `auth/` (scope tiers and ADC auth factory), `ga4/` (Admin client + read/upsert wrappers), `gtm/` (Tag Manager client + read/upsert/version/preview/publish wrappers), `planner/` (desiredState, currentState, diff, applyPlan), `tools/` (12 MCP tool registrations).
+- Source: `src/` — subdirs `utils/` (errors, redact, stableJson, logger, names), `spec/` (zod schema, readSpec, validateSpec, summarize), `safety/` (9 guards), `auth/` (scope tiers, ADC auth factory, auth status check, setup wizard), `ga4/` (Admin client + read/upsert wrappers), `gtm/` (Tag Manager client + read/upsert/version/preview/publish wrappers), `planner/` (desiredState, currentState, diff, applyPlan), `tools/` (13 MCP tool registrations).
 - Tests: `tests/` (vitest), with `tests/fixtures/specs/*.yaml` for spec fixtures.
 - Build output: `dist/` (gitignored).
 - Audit log: `.audit/audit-YYYY-MM-DD.log` (gitignored; one JSON line per safety event, written through `utils/redact`).
@@ -183,7 +183,7 @@ This is an execution layer, not an analytics planner. It must not invent events,
 - Tighten an existing line instead of adding a near-duplicate.
 - Delete stale learnings when the underlying issue goes away.
 - Use ADC as the only GA4/GTM runtime authentication path; never restore repository-managed Desktop-client or refresh-token fallbacks.
-- `npm run login` provisions standard gcloud ADC with the complete login scope union and no quota project; document the built-in client as best-effort and the acquisition-only custom-client form as supported, and keep the process active while the operator completes browser OAuth.
+- `npm run login` provisions standard gcloud ADC with the complete login scope union and no quota project; document the built-in client as blocked by Google for Analytics scopes and the acquisition-only custom-client form as the supported path, and keep the process active while the operator completes browser OAuth.
 - For operator-controlled custom-client authorization, keep `npm run login` active and relay its printed authorization URL without automating the browser; do not use `--no-launch-browser`, and use `--no-browser` only when a separate-machine remote-bootstrap flow is actually required.
 - Do not require a runtime Google Cloud project ID for GA4/GTM client calls; ADC supplies credentials, OAuth scopes authorize capabilities, and GA4/GTM product roles authorize resources.
 - Use absolute placeholder paths for optional `GOOGLE_APPLICATION_CREDENTIALS`, the Node executable, and the server entrypoint in every MCP configuration example.

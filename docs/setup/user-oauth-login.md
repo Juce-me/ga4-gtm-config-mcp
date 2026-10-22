@@ -15,10 +15,16 @@ Install the gcloud CLI, complete the acquisition-only Desktop-client setup in [G
 
 ## Run the supported login flow
 
-Use an absolute path to the Desktop client JSON:
+The guided path walks through every step, validates the client JSON shape without displaying it, and verifies access at the end:
 
 ```bash
 npm install
+npm run setup
+```
+
+Or run login directly with an absolute path to the Desktop client JSON:
+
+```bash
 npm run login -- --client-id-file=/absolute/path/to/oauth-client.json
 ```
 
@@ -26,7 +32,14 @@ Keep this command active. It opens or prints a browser authorization flow; sign 
 
 `npm run login` delegates to `gcloud auth application-default login --disable-quota-project` with the complete runtime scope union and gcloud's required `cloud-platform` scope. `cloud-platform` remains in that gcloud scope list because it is required for this custom-scope user-ADC flow; runtime mode scope arrays remain unchanged.
 
-Bare `npm run login` is available as a best-effort convenience. It uses gcloud's built-in OAuth client, which can warn about or reject custom Analytics scopes. Use the `--client-id-file` form above when custom-scope user ADC is required.
+Always pass `--client-id-file`. Without it gcloud uses its built-in OAuth client, and Google blocks that client for the Analytics scopes: the consent screen shows "This app is blocked".
+
+## OAuth audience
+
+The Google Cloud project that owns your Desktop client controls who may sign in (Google Auth Platform > Audience):
+
+- **Internal** (Google Workspace organizations): no test-user list and no periodic re-login. Prefer it when your organization allows it.
+- **External + Testing**: add the Google account you sign in with under Test users. Expect an "unverified app" warning and a re-login about every 7 days, because consent and refresh tokens for sensitive scopes expire in Testing mode.
 
 ## Safe verification
 
@@ -42,7 +55,7 @@ Do not display, paste, save, or attach the token. A successful command exit conf
 
 If the server reports that ADC is unavailable or invalid, repeat the supported login command and complete browser consent again. Restart the MCP host after ADC is refreshed.
 
-If gcloud warns that its built-in client cannot support the requested custom Analytics scopes, use the supported `--client-id-file=/absolute/path/to/oauth-client.json` form. If a browser sign-in selects the wrong Google user, rerun login and choose the operator who has the intended GA4/GTM roles.
+If the browser shows "This app is blocked" or "Access blocked", you are using gcloud's built-in client or your account is not a test user: use `--client-id-file=/absolute/path/to/oauth-client.json`, add your account under Test users (External audience), and confirm the Google Analytics Admin API and Tag Manager API are enabled in the client's project. If a browser sign-in selects the wrong Google user, rerun login and choose the operator who has the intended GA4/GTM roles.
 
 If access to a target still fails after successful ADC verification, confirm the target argument and the operator's existing GA4 property or GTM account/container role. OAuth scopes do not grant those product roles.
 

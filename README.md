@@ -57,7 +57,7 @@ The short version:
 
 The tracked OAuth client example contains placeholders only. Do not replace those placeholders in Git, copy a downloaded client JSON into this repository, or configure a client-ID file as ADC. `GOOGLE_APPLICATION_CREDENTIALS` accepts an ADC credential file, not an OAuth client-ID download.
 
-The acquisition-only custom-client command is the supported user-ADC path. gcloud's built-in OAuth client is a best-effort convenience for custom Analytics scopes. Service-account impersonation or another externally provisioned standard ADC source are alternatives when user ADC is not appropriate. OAuth scopes and ADC do not add GA4/GTM product access.
+The acquisition-only custom-client command is the supported user-ADC path. gcloud's built-in OAuth client is blocked by Google for the Analytics scopes, so it is not a supported path. `npm run setup` guides the whole flow (client check, sign-in, access verification, MCP host entry). Service-account impersonation or another externally provisioned standard ADC source are alternatives when user ADC is not appropriate. OAuth scopes and ADC do not add GA4/GTM product access.
 
 ## 5. Local run
 
@@ -67,7 +67,7 @@ npm run dev   # build + run
 npm run mcp   # node dist/server.js
 ```
 
-The server speaks MCP over **stdio**. `stdout` is reserved for the transport; all logging goes to `stderr` as JSON lines. On boot it emits one `tool_registered` line per tool (12 total) on stderr and nothing on stdout.
+The server speaks MCP over **stdio**. `stdout` is reserved for the transport; all logging goes to `stderr` as JSON lines. On boot it emits one `tool_registered` line per tool (13 total) on stderr and nothing on stdout.
 
 ## 6. MCP client configuration example
 
@@ -123,6 +123,7 @@ Every tool description begins with an explicit safety label. Only the two `_gate
 
 | Tool | Label | Summary |
 |------|-------|---------|
+| `check_auth_status` | `[read-only]` | Step-by-step authorization diagnostic: ADC selector, access token, granted scopes, publish gate, and optional GA4/GTM read probes (pass `ga4_property_id`, `account_id`, `container_id`). Each failure returns a `next_step`. No writes. |
 | `read_mcp_execution_spec` | `[read-only]` | Loads and returns the parsed `mcp-execution.yaml`. No Google API call. |
 | `validate_mcp_execution_spec` | `[read-only]` | Runs schema + semantic validation; returns `ok`/`warnings`/`errors`. No Google API call. |
 | `summarize_mcp_execution_spec` | `[read-only]` | Human-readable summary including all four gate booleans. |

@@ -15,18 +15,20 @@ The server does not read or require a Google Cloud project ID for GA4 Admin or G
 
 1. Confirm the operator identity already has the required GA4 property and GTM account/container roles.
 2. Follow [Google Cloud credentials](google-cloud-credentials.md) to choose an ADC source. For the supported custom-scope user-ADC path, create a Desktop OAuth client for gcloud acquisition only.
-3. Run the canonical local flow and complete browser authorization while the login command remains active:
+3. Run the guided setup. It checks gcloud, validates the Desktop client JSON, runs the browser sign-in (keep it active until it reports success), verifies access, and prints the MCP host entry:
 
    ```bash
    npm install
-   npm run login -- --client-id-file=/absolute/path/to/oauth-client.json
-   npm run build
+   npm run setup
    ```
 
-4. Configure the [MCP host](mcp-client-configuration.md) with absolute paths to Node and the built server. Leave its environment empty to use well-known local ADC, unless another standard ADC source is required.
-5. Hand the server only reviewed execution-spec paths and target arguments as described in [application project integration](application-project-integration.md).
+   To run the pieces yourself instead: `npm run login -- --client-id-file=/absolute/path/to/oauth-client.json`, then `npm run build`.
 
-`npm run login` delegates to `gcloud auth application-default login --disable-quota-project`. It requests the complete runtime scope union plus gcloud's required `cloud-platform` scope, writes to gcloud's standard ADC location, and requires browser interaction. The Desktop OAuth client file is consumed by gcloud during acquisition only; the runtime server never reads it. Bare `npm run login` uses gcloud's built-in client and is best-effort for custom Analytics scopes. `cloud-platform` remains in the gcloud scope list because gcloud requires it for this custom-scope user-ADC flow; runtime mode scope arrays remain unchanged.
+4. Configure the [MCP host](mcp-client-configuration.md) with absolute paths to Node and the built server. Leave its environment empty to use well-known local ADC, unless another standard ADC source is required.
+5. Call the `check_auth_status` tool (optionally with `ga4_property_id`, `account_id`, `container_id`) to verify ADC, scopes, and resource access; each failing check names the next step.
+6. Hand the server only reviewed execution-spec paths and target arguments as described in [application project integration](application-project-integration.md).
+
+`npm run login` delegates to `gcloud auth application-default login --disable-quota-project`. It requests the complete runtime scope union plus gcloud's required `cloud-platform` scope, writes to gcloud's standard ADC location, and requires browser interaction. The Desktop OAuth client file is consumed by gcloud during acquisition only; the runtime server never reads it. Bare `npm run login` without `--client-id-file` uses gcloud's built-in client, which Google blocks for the Analytics scopes; it is not a supported path. `cloud-platform` remains in the gcloud scope list because gcloud requires it for this custom-scope user-ADC flow; runtime mode scope arrays remain unchanged.
 
 ## Migration from removed OAuth-path variables
 

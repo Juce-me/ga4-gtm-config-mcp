@@ -233,6 +233,17 @@ export function validateSpec(spec: McpExecutionSpec): ValidationResult {
     });
   }
 
+  // 6b. Custom event triggers match on the event name only; extra conditions broke GA4 collect.
+  spec.gtm_web.triggers.forEach((trigger, i) => {
+    if (trigger.type === "custom_event" && trigger.filters.length > 0) {
+      errors.push({
+        code: "SPEC_INVALID",
+        message: `Custom event trigger "${trigger.name}" has ${trigger.filters.length} filter condition(s); it must match on event_name only`,
+        path: `gtm_web.triggers[${i}].filters`,
+      });
+    }
+  });
+
   // 7. Consent guard.
   const consentTagTypes = new Set(["consent_initialization", "consent_settings"]);
   const consentChange = spec.gtm_web.tags.some((t) => consentTagTypes.has(t.type));

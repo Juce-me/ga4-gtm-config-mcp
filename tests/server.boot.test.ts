@@ -15,6 +15,7 @@ import { assertSafeToolMetadata } from "../src/safety/toolMetadataGuards.js";
 const EXPECTED_TOOL_NAMES = [
   "apply_ga4_admin_changes",
   "apply_gtm_workspace_changes",
+  "check_auth_status",
   "create_gtm_container_version_gated",
   "create_gtm_workspace",
   "diff_ga4_gtm_state",

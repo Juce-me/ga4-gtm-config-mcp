@@ -28,9 +28,9 @@ For service-account impersonation, use a standard ADC configuration that instruc
 The supported local flow uses gcloud and an acquisition-only Desktop OAuth client:
 
 1. In the Google Cloud project used for OAuth setup, enable Google Analytics Admin API and Tag Manager API.
-2. In Google Auth Platform, configure the intended audience and create an application type **Desktop app** client.
+2. In Google Auth Platform, configure the intended audience (see [OAuth audience](user-oauth-login.md#oauth-audience)) and create an application type **Desktop app** client.
 3. Download the real client JSON to a private absolute path outside every repository. Use the tracked [`oauth-client-example.json`](../../oauth-client-example.json) only to recognize the expected JSON shape; never fill its placeholders with real values.
-4. Run the [login command](user-oauth-login.md) with `--client-id-file`.
+4. Run `npm run setup`, or the [login command](user-oauth-login.md) with `--client-id-file`.
 
 The client JSON identifies gcloud during browser acquisition only. It is not passed to the MCP host or read by the runtime server. Treat it as sensitive and do not copy its contents into documentation, specs, logs, or tracked configuration.
 
@@ -38,7 +38,7 @@ The client-ID download is an acquisition input, not ADC; never assign its path t
 
 ## Scope acquisition
 
-`npm run login` delegates to `gcloud auth application-default login --disable-quota-project` with the complete runtime scope union plus gcloud's required `cloud-platform` scope. The command stays active while the operator finishes browser authorization and writes standard user ADC. Bare `npm run login` uses the built-in gcloud client and is best-effort for custom Analytics scopes. Keep `cloud-platform` in gcloud's scope list because gcloud requires it for the custom-scope user-ADC flow; runtime mode scope arrays remain unchanged.
+`npm run login` delegates to `gcloud auth application-default login --disable-quota-project` with the complete runtime scope union plus gcloud's required `cloud-platform` scope. The command stays active while the operator finishes browser authorization and writes standard user ADC. Bare `npm run login` without `--client-id-file` uses the built-in gcloud client, which Google blocks for the Analytics scopes. Keep `cloud-platform` in gcloud's scope list because gcloud requires it for the custom-scope user-ADC flow; runtime mode scope arrays remain unchanged.
 
 ADC and OAuth scopes authorize API capability, but they do not add GA4 property or GTM account/container roles. Select the operator identity deliberately and confirm its existing product permissions before use.
 

@@ -1,6 +1,7 @@
 // src/server.ts
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { registerAuthTools } from "./tools/authTools.js";
 import { registerReadTools } from "./tools/readTools.js";
 import { registerValidateTools } from "./tools/validateTools.js";
 import { registerDiffTools } from "./tools/diffTools.js";
@@ -18,6 +19,7 @@ export function buildServer() {
   });
 
   const tools: ToolMeta[] = [];
+  registerAuthTools(server, tools);
   registerReadTools(server, tools);
   registerValidateTools(server, tools);
   registerDiffTools(server, tools);

@@ -34,8 +34,8 @@ function makeContractWriters(calls: WriteCall[]): Writers {
     },
     upsertTrigger: async (_unused, _workspaceRef, payload) => {
       const idByName = new Map([
-        ["CE - userevent - event", "101"],
-        ["CE - userevent - pageview", "102"],
+        ["CE - userevent", "101"],
+        ["CE - pageview", "102"],
       ]);
       calls.push({ kind: "gtm_trigger", name: String(payload.name), payload });
       return { action: "create", entity: { ...payload, triggerId: idByName.get(String(payload.name)) } };
@@ -97,28 +97,21 @@ describe("MCP execution contract", () => {
         { type: "integer", key: "dataLayerVersion", value: "2" },
       ],
     });
-    expect(calls.find((c) => c.kind === "gtm_trigger" && c.name === "CE - userevent - pageview")?.payload).toMatchObject({
-      name: "CE - userevent - pageview",
+    const pageviewTrigger = calls.find((c) => c.kind === "gtm_trigger" && c.name === "CE - pageview")?.payload;
+    expect(pageviewTrigger).toMatchObject({
+      name: "CE - pageview",
       type: "customEvent",
       customEventFilter: [
         {
           type: "EQUALS",
           parameter: [
             { type: "template", key: "arg0", value: "{{_event}}" },
-            { type: "template", key: "arg1", value: "userevent" },
-          ],
-        },
-      ],
-      filter: [
-        {
-          type: "EQUALS",
-          parameter: [
-            { type: "template", key: "arg0", value: "{{DLV - event_type}}" },
             { type: "template", key: "arg1", value: "pageview" },
           ],
         },
       ],
     });
+    expect(pageviewTrigger).not.toHaveProperty("filter");
     expect(calls.find((c) => c.kind === "gtm_tag" && c.name === "GA4 - Page View")?.payload).toMatchObject({
       name: "GA4 - Page View",
       type: "gaawe",

@@ -22,6 +22,19 @@ describe("validateSpec", () => {
     expect(r.errors).toEqual([]);
   });
 
+  it("rejects custom event triggers with any filter condition", async () => {
+    const spec = await validSpec();
+    spec.gtm_web.triggers[1]!.filters = [{ variable: "DLV - event_type", operator: "equals", value: "event" }];
+
+    const r = validateSpec(spec);
+
+    expect(r.ok).toBe(false);
+    expect(r.errors).toContainEqual(expect.objectContaining({
+      code: "SPEC_INVALID",
+      path: "gtm_web.triggers[1].filters",
+    }));
+  });
+
   it("rejects unsupported planner-facing GTM built-ins", async () => {
     const spec = await validSpec();
     spec.gtm_web.built_in_variables = ["Page URL", "Page Path", "Page Hostname", "Referrer", "Event", "Page Title"];
